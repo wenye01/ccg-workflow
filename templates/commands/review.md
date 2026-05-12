@@ -134,4 +134,3 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 1. **无参数 = 审查 git diff** – 自动获取当前变更
 2. **双模型交叉验证** – 后端问题以 {{BACKEND_PRIMARY}} 为准，前端问题以 {{FRONTEND_PRIMARY}} 为准
-3. 外部模型对文件系统**零写入权限**

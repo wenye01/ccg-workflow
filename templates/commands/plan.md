@@ -12,7 +12,6 @@ $ARGUMENTS
 
 - **语言协议**：与工具/模型交互用**英语**，与用户交互用**中文**
 - **强制并行**：后端/前端模型调用必须使用 `run_in_background: true`（包含单模型调用，避免阻塞主线程）
-- **代码主权**：外部模型对文件系统**零写入权限**，所有修改由 Claude 执行
 - **止损机制**：当前阶段输出通过验证前，不进入下一阶段
 - **仅规划**：本命令允许读取上下文与写入 `.claude/plan/*` 计划文件，但**禁止修改产品代码**
 
@@ -253,5 +252,4 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 1. **仅规划不实施** – 本命令不执行任何代码变更
 2. **不问 Y/N** – 只展示计划，让用户决定下一步
 3. **信任规则** – 后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准
-4. 外部模型对文件系统**零写入权限**
-5. **SESSION_ID 交接** – 计划末尾必须包含 `CODEX_SESSION` / `GEMINI_SESSION`（供 `/ccg:execute resume <SESSION_ID>` 使用）
+4. **SESSION_ID 交接** – 计划末尾必须包含 `CODEX_SESSION` / `GEMINI_SESSION`（供 `/ccg:execute resume <SESSION_ID>` 使用）

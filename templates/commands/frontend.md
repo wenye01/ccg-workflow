@@ -163,5 +163,3 @@ Claude 综合规划，请求用户批准后存入 `.claude/plan/任务名.md`
 
 1. **{{FRONTEND_PRIMARY}} 前端意见可信赖**
 2. **{{BACKEND_PRIMARY}} 前端意见仅供参考**
-3. 外部模型对文件系统**零写入权限**
-4. Claude 负责所有代码写入和文件操作

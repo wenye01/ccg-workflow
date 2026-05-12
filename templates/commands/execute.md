@@ -1,5 +1,5 @@
 ---
-description: '多模型协作执行 - 根据计划获取原型 → Claude 重构实施 → 多模型审计交付'
+description: '多模型协作执行 - 根据计划多模型直接实施 → 返回执行结果'
 ---
 
 # Execute - 多模型协作执行
@@ -11,8 +11,7 @@ $ARGUMENTS
 ## 核心协议
 
 - **语言协议**：与工具/模型交互用**英语**，与用户交互用**中文**
-- **代码主权**：外部模型对文件系统**零写入权限**，所有修改由 Claude 执行
-- **脏原型重构**：将外部模型的 Unified Diff 视为"脏原型"，必须重构为生产级代码
+- **直接实施**：外部模型直接读写文件并返回 batch 执行结果
 - **止损机制**：当前阶段输出通过验证前，不进入下一阶段
 - **前置条件**：仅在用户对 `/ccg:plan` 输出明确回复 "Y" 后执行（如缺失，必须先二次确认）
 
@@ -28,7 +27,7 @@ $ARGUMENTS
 **调用语法**（并行用 `run_in_background: true`）：
 
 ```
-# 复用会话调用（推荐）- 原型生成（Implementation Prototype）
+# 复用会话调用（推荐）- 直接实施（Implementation）
 Bash({
   command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
@@ -36,14 +35,14 @@ ROLE_FILE: <角色提示词路径>
 需求：<任务描述>
 上下文：<计划内容 + 目标文件>
 </TASK>
-OUTPUT: Unified Diff Patch ONLY. Strictly prohibit any actual modifications.
+OUTPUT: Execute the implementation directly and return the batch result summary.
 EOF",
   run_in_background: true,
   timeout: 3600000,
   description: "简短描述"
 })
 
-# 新会话调用 - 原型生成（Implementation Prototype）
+# 新会话调用 - 直接实施（Implementation）
 Bash({
   command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'EOF'
 ROLE_FILE: <角色提示词路径>
@@ -51,32 +50,7 @@ ROLE_FILE: <角色提示词路径>
 需求：<任务描述>
 上下文：<计划内容 + 目标文件>
 </TASK>
-OUTPUT: Unified Diff Patch ONLY. Strictly prohibit any actual modifications.
-EOF",
-  run_in_background: true,
-  timeout: 3600000,
-  description: "简短描述"
-})
-```
-
-**审计调用语法**（Code Review / Audit）：
-
-```
-Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"{{WORKDIR}}\" <<'EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-Scope: Audit the final code changes.
-Inputs:
-- The applied patch (git diff / final unified diff)
-- The touched files (relevant excerpts if needed)
-Constraints:
-- Do NOT modify any files.
-- Do NOT output tool commands that assume filesystem access.
-</TASK>
-OUTPUT:
-1) A prioritized list of issues (severity, file, rationale)
-2) Concrete fixes; if code changes are needed, include a Unified Diff Patch in a fenced code block.
+OUTPUT: Execute the implementation directly and return the batch result summary.
 EOF",
   run_in_background: true,
   timeout: 3600000,
@@ -89,7 +63,6 @@ EOF",
 | 阶段 | 后端 | 前端 |
 |------|-------|--------|
 | 实施 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md` |
-| 审查 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md` |
 
 **会话复用**：如果 `/ccg:plan` 提供了 SESSION_ID，使用 `resume <SESSION_ID>` 复用上下文。
 
@@ -166,9 +139,9 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 ---
 
-### 🎨 Phase 3：原型获取
+### 🎨 Phase 3：多模型直接实施
 
-`[模式：原型]`
+`[模式：实施]`
 
 **根据任务类型路由**：
 
@@ -178,8 +151,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 1. 调用 {{FRONTEND_PRIMARY}}（使用 `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/frontend.md`）
 2. 输入：计划内容 + 检索到的上下文 + 目标文件
-3. OUTPUT: `Unified Diff Patch ONLY. Strictly prohibit any actual modifications.`
-4. **{{FRONTEND_PRIMARY}} 是前端设计的权威，其 CSS/React/Vue 原型为最终视觉基准**
+3. OUTPUT: `Execute the implementation directly and return the batch result summary.`
+4. **{{FRONTEND_PRIMARY}} 是前端设计的权威，其 CSS/React/Vue 实现为最终视觉基准**
 5. ⚠️ **警告**：忽略前端模型对后端逻辑的建议
 6. 若计划包含 `FRONTEND_SESSION`：优先 `resume <FRONTEND_SESSION>`
 
@@ -187,7 +160,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 1. 调用 {{BACKEND_PRIMARY}}（使用 `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/architect.md`）
 2. 输入：计划内容 + 检索到的上下文 + 目标文件
-3. OUTPUT: `Unified Diff Patch ONLY. Strictly prohibit any actual modifications.`
+3. OUTPUT: `Execute the implementation directly and return the batch result summary.`
 4. **{{BACKEND_PRIMARY}} 是后端逻辑的权威，利用其逻辑运算与 Debug 能力**
 5. 若计划包含 `BACKEND_SESSION`：优先 `resume <BACKEND_SESSION>`
 
@@ -203,69 +176,27 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 ---
 
-### ⚡ Phase 4：编码实施
+### ⚡ Phase 4：结果收集
 
-`[模式：实施]`
+`[模式：收集]`
 
-**Claude 作为代码主权者执行以下步骤**：
+**Claude 等待外部模型返回 batch 执行结果**：
 
-1. **读取 Diff**：解析外部模型返回的 Unified Diff Patch
+1. **等待结果**：用 `TaskOutput` 获取外部模型完整输出
 
-2. **思维沙箱**：
-   - 模拟应用 Diff 到目标文件
-   - 检查逻辑一致性
-   - 识别潜在冲突或副作用
+2. **记录结果**：
+   - 保存返回的 SESSION_ID / batch 标识
+   - 汇总外部模型报告的修改文件、命令输出和完成状态
 
-3. **重构清理**：
-   - 将"脏原型"重构为**高可读、高可维护性、企业发布级代码**
-   - 去除冗余代码
-   - 确保符合项目现有代码规范
-   - **非必要不生成注释与文档**，代码自解释
-
-4. **最小作用域**：
-   - 变更仅限需求范围
-   - **强制审查**变更是否引入副作用
-   - 做针对性修正
-
-5. **应用变更**：
-   - 使用 Edit/Write 工具执行实际修改
-   - **仅修改必要的代码**，严禁影响用户现有的其他功能
-6. **自检验证**（强烈建议）：
-   - 运行项目既有的 lint / typecheck / tests（优先最小相关范围）
-   - 若失败：优先修复回归，再继续进入 Phase 5
+3. **失败处理**：
+   - 若模型执行失败，按重试规则处理
+   - 若重试后仍失败，向用户报告失败原因和已完成部分
 
 ---
 
-### ✅ Phase 5：审计与交付
+### ✅ Phase 5：交付确认
 
-`[模式：审计]`
-
-#### 5.1 自动审计
-
-**变更生效后，强制立即并行调用** {{BACKEND_PRIMARY}} 和 {{FRONTEND_PRIMARY}} 进行 Code Review：
-
-1. **{{BACKEND_PRIMARY}} 审查**（`run_in_background: true`）：
-   - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`
-   - 输入：变更的 Diff + 目标文件
-   - 关注：安全性、性能、错误处理、逻辑正确性
-
-2. **{{FRONTEND_PRIMARY}} 审查**（`run_in_background: true`）：
-   - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
-   - 输入：变更的 Diff + 目标文件
-   - 关注：可访问性、设计一致性、用户体验
-
-用 `TaskOutput` 等待两个模型的完整审查结果。优先复用 Phase 3 的会话（`resume <SESSION_ID>`）以保持上下文一致。
-
-#### 5.2 整合修复
-
-1. 综合 {{BACKEND_PRIMARY}} + {{FRONTEND_PRIMARY}} 的审查意见
-2. 按信任规则权衡：后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准
-3. 执行必要的修复
-4. 修复后按需重复 Phase 5.1（直到风险可接受）
-
-#### 5.3 交付确认
-
-审计通过后，向用户报告：
+外部模型执行完成后，向用户报告：
 
 ```markdown
 ## ✅ 执行完成
@@ -275,9 +206,9 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 |------|------|------|
 | path/to/file.ts | 修改 | 描述 |
 
-### 审计结果
-- {{BACKEND_PRIMARY}}：<通过/发现 N 个问题>
-- {{FRONTEND_PRIMARY}}：<通过/发现 N 个问题>
+### 执行结果
+- {{BACKEND_PRIMARY}}：<完成/失败/跳过>
+- {{FRONTEND_PRIMARY}}：<完成/失败/跳过>
 
 ### 后续建议
 1. [ ] <建议的测试步骤>
@@ -288,11 +219,10 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 ## 关键规则
 
-1. **代码主权** – 所有文件修改由 Claude 执行，外部模型零写入权限
-2. **脏原型重构** – 外部模型的输出视为草稿，必须重构
+1. **直接实施** – 外部模型可直接读写文件
+2. **结果返回** – 外部模型只需返回 batch 执行结果与变更摘要
 3. **信任规则** – 后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准
 4. **最小变更** – 仅修改必要的代码，不引入副作用
-5. **强制审计** – 变更后必须进行多模型 Code Review
 
 ---
 

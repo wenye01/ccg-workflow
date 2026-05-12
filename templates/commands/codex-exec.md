@@ -1,5 +1,5 @@
 ---
-description: '{{BACKEND_PRIMARY}} 全权执行计划 - 读取 /ccg:plan 产出的计划文件，{{BACKEND_PRIMARY}} 承担 MCP 搜索 + 代码实现 + 测试，多模型审核'
+description: '{{BACKEND_PRIMARY}} 全权执行计划 - 读取 /ccg:plan 产出的计划文件，{{BACKEND_PRIMARY}} 承担 MCP 搜索 + 代码实现 + 测试并返回 batch 结果'
 ---
 
 # Codex-Exec - Codex 全权执行计划
@@ -16,19 +16,18 @@ $ARGUMENTS
 /ccg:plan → 多模型协同规划（Codex ∥ Gemini 分析 → Claude 综合）
                 ↓ 计划文件 (.claude/plan/xxx.md)
 /ccg:codex-exec → Codex 全权执行（MCP 搜索 + 代码实现 + 测试）
-                ↓ 代码变更
-                → 多模型审核（Codex ∥ Gemini 交叉审查）
+                ↓ batch 执行结果
 ```
 
 **与 `/ccg:execute` 的区别**：
 
 | 维度 | `/ccg:execute` | `/ccg:codex-exec` |
 |------|---------------|-------------------|
-| 代码实现 | Claude 重构 {{BACKEND_PRIMARY}}/{{FRONTEND_PRIMARY}} 的 Diff | **{{BACKEND_PRIMARY}} 直接实现** |
+| 代码实现 | {{BACKEND_PRIMARY}}/{{FRONTEND_PRIMARY}} 直接实现 | **{{BACKEND_PRIMARY}} 直接实现** |
 | MCP 搜索 | Claude 调用 MCP | **{{BACKEND_PRIMARY}} 调用 MCP** |
-| Claude 上下文 | 高（搜索结果 + 代码全进来） | **极低（只看摘要 + diff）** |
+| Claude 上下文 | 低（只收集 batch 结果） | **极低（只看 batch 摘要）** |
 | Claude token | 大量消耗 | **极少消耗** |
-| 审核 | 多模型审查 | **多模型审查（不变）** |
+| 二次处理 | 无 | **无** |
 
 ---
 
@@ -76,36 +75,6 @@ EXEC_EOF",
 })
 ```
 
-**审核调用语法**（Codex ∥ Gemini 并行审查）：
-
-```
-Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend <{{BACKEND_PRIMARY}}|{{FRONTEND_PRIMARY}}> {{GEMINI_MODEL_FLAG}}- \"{{WORKDIR}}\" <<'REVIEW_EOF'
-ROLE_FILE: <角色提示词路径>
-<TASK>
-Scope: Audit the code changes made by Codex.
-Inputs:
-- The git diff (applied changes)
-- The implementation plan
-Constraints:
-- Do NOT modify any files.
-</TASK>
-OUTPUT:
-1) A prioritized list of issues (severity, file, rationale)
-2) If code changes are needed, include a Unified Diff Patch in a fenced code block.
-REVIEW_EOF",
-  run_in_background: true,
-  timeout: 3600000,
-  description: "简短描述"
-})
-```
-
-**角色提示词**：
-
-| 阶段 | 后端 | 前端 |
-|------|-------|--------|
-| 审查 | `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md` | `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md` |
-
 **等待后台任务**（最大超时 600000ms = 10 分钟）：
 
 ```
@@ -151,8 +120,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
    **步骤**：<N 步>
    **关键文件**：<N 个>
 
-   Codex 将自主完成：MCP 搜索 + 代码实现 + 测试验证
-   Claude 仅做最终审核
+   Codex 将自主完成：MCP 搜索 + 代码实现 + 测试验证，并返回 batch 执行结果
 
    确认执行？(Y/N)
    ```
@@ -234,104 +202,19 @@ EXEC_EOF",
 
 ---
 
-### 🔍 Phase 2：Claude 轻量审核
+### 🔍 Phase 2：结果收集
 
-`[模式：审核]`
+`[模式：收集]`
 
-**Claude 只做最小验证，不重复 Codex 已做的工作**：
+**Claude 只等待并记录 Codex 返回的 batch 执行结果**：
 
-1. **读取 Codex 报告**：解析 CONTEXT_GATHERED / CHANGES_MADE / VERIFICATION_RESULTS / REMAINING_ISSUES
-2. **查看实际变更**：
-
-   ```
-   Bash({ command: "git diff HEAD", description: "查看 Codex 实际变更" })
-   ```
-
-3. **快速判定**：
-   - 变更是否在计划范围内？
-   - 是否有明显安全/逻辑问题？
-   - 测试是否通过？
-
-4. **处理结果**：
-   - ✅ **通过** → Phase 3 多模型审核
-   - ⚠️ **小问题** → Claude 直接修复（< 10 行的修正 Claude 自己做）
-   - ❌ **需返工** → Phase 2.5 追加指令
+1. 读取 Codex 报告：CONTEXT_GATHERED / CHANGES_MADE / VERIFICATION_RESULTS / REMAINING_ISSUES
+2. 保存 `CODEX_EXEC_SESSION` / batch 标识，供后续任务复用
+3. 若 Codex 执行失败，向用户报告失败原因和已完成部分
 
 ---
 
-### 🔄 Phase 2.5：追加指令（仅在需返工时）
-
-`[模式：追加]`
-
-**复用 Codex 会话，下发修正指令**：
-
-```
-Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--progress --backend {{BACKEND_PRIMARY}} {{GEMINI_MODEL_FLAG}}resume <CODEX_EXEC_SESSION> - \"{{WORKDIR}}\" <<'FIXEOF'
-<TASK>
-The implementation needs corrections:
-
-## Issues Found
-1. <问题描述 + 具体文件:行号>
-2. <问题描述 + 具体文件:行号>
-
-## Required Fixes
-1. <具体修正要求>
-2. <具体修正要求>
-
-Apply fixes and re-run tests. Report results in the same format.
-</TASK>
-FIXEOF",
-  run_in_background: true,
-  timeout: 3600000,
-  description: "Codex 修正：<问题简述>"
-})
-```
-
-等待完成后回到 Phase 2。**最多 2 轮返工**，超过则 Claude 直接接管修复。
-
----
-
-### ✅ Phase 3：多模型审核
-
-`[模式：审核]`
-
-**并行调用 {{BACKEND_PRIMARY}} + {{FRONTEND_PRIMARY}} 交叉审查**（多模型协同不变）：
-
-1. **获取变更 diff**：
-
-   ```
-   Bash({ command: "git diff HEAD", description: "获取完整变更 diff" })
-   ```
-
-2. **并行调用**（`run_in_background: true`）：
-
-   - **{{BACKEND_PRIMARY}} 审查**：
-     - ROLE_FILE: `~/.claude/.ccg/prompts/{{BACKEND_PRIMARY}}/reviewer.md`
-     - 输入：变更 Diff + 计划文件内容
-     - 关注：安全性、性能、错误处理、逻辑正确性
-
-   - **{{FRONTEND_PRIMARY}} 审查**：
-     - ROLE_FILE: `~/.claude/.ccg/prompts/{{FRONTEND_PRIMARY}}/reviewer.md`
-     - 输入：变更 Diff + 计划文件内容
-     - 关注：代码可读性、设计一致性、可维护性
-
-   用 `TaskOutput` 等待两个模型的完整审查结果。
-
-3. **整合审查意见**：
-   - 按信任规则：后端问题以 {{BACKEND_PRIMARY}} 为准，前端问题以 {{FRONTEND_PRIMARY}} 为准
-   - **Critical** → 必须修复（Claude 直接修或再派 Codex）
-   - **Warning** → 建议修复，报告给用户决定
-   - **Info** → 记录不处理
-
-4. **执行修复**（如有 Critical）：
-   - < 10 行修正：Claude 直接修
-   - ≥ 10 行修正：再派 Codex（复用 `CODEX_EXEC_SESSION`）
-   - 修复后可选重复 Phase 3（直到风险可接受）
-
----
-
-### 📦 Phase 4：交付
+### 📦 Phase 3：交付
 
 `[模式：交付]`
 
@@ -344,21 +227,16 @@ FIXEOF",
 | 项目 | 详情 |
 |------|------|
 | 计划 | <计划文件路径> |
-| 模式 | Codex 全权执行 + 多模型审核 |
+| 模式 | Codex 全权执行 |
 | 搜索 | <Codex 使用了哪些 MCP 工具，关键发现> |
 | 变更 | <N 个文件，+X/-Y 行> |
 | 测试 | <通过/失败> |
-| 返工 | <0/1/2 轮> |
+| Batch | <SESSION_ID / batch 标识> |
 
 ### 变更清单
 | 文件 | 操作 | 说明 |
 |------|------|------|
 | path/to/file.ts | 修改/新增 | 描述 |
-
-### 审核结果
-- Codex 审查：<通过/发现 N 个问题>
-- Gemini 审查：<通过/发现 N 个问题>
-- Claude 处理：<已修复 N 个 Critical，N 个 Warning 待用户决定>
 
 ### 后续建议
 1. [ ] <建议的测试步骤>
@@ -369,13 +247,12 @@ FIXEOF",
 
 ## 关键规则
 
-1. **Claude 极简原则** — Claude 不调用 MCP、不做代码检索。只读计划、指挥 Codex、审核结果。
+1. **Claude 极简原则** — Claude 不调用 MCP、不做代码检索、不做二次处理，只读取计划并收集 batch 结果。
 2. **{{BACKEND_PRIMARY}} 全权执行** — MCP 搜索、文档查询、代码检索、实现、测试全由 {{BACKEND_PRIMARY}} 完成。
-3. **多模型审核不变** — 审核阶段仍然 Codex ∥ Gemini 交叉审查，保证质量。
+3. **结果返回** — 外部模型只需返回 batch 执行结果与变更摘要。
 4. **信任规则** — 后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准。
 5. **一次性下发** — 尽量一次给 Codex 完整指令 + 完整计划，减少来回通信。
-6. **最多 2 轮返工** — 超过 2 轮 Claude 直接接管，避免无限循环。
-7. **计划对齐** — Codex 实现必须在计划范围内，超出范围的变更视为违规。
+6. **计划对齐** — Codex 实现必须在计划范围内，超出范围的变更视为违规。
 
 ---
 
@@ -401,11 +278,11 @@ FIXEOF",
           ┌─────────┴─────────┐
           ↓                   ↓
    /ccg:execute        /ccg:codex-exec
-   (Claude 重构)       (Codex 全权)
-   Claude 高消耗       Claude 极低消耗
-   精细控制             高效执行
+   (多模型直接实施)     (Codex 全权)
+   Claude 低消耗       Claude 极低消耗
+   按任务路由           高效执行
 ```
 
 用户可根据任务特点选择：
-- **需要精细控制** → `/ccg:execute`（Claude 逐行重构）
+- **需要按任务路由** → `/ccg:execute`（前端/后端模型直接实施）
 - **需要高效执行** → `/ccg:codex-exec`（Codex 一把梭）

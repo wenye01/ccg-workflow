@@ -87,7 +87,7 @@ description: '初始化 OpenSpec (OPSX) 环境 + 验证多模型 MCP 工具'
    **Next Steps (Use CCG Encapsulated Commands)**
    1. Start Research: `/ccg:spec-research "description"`
    2. Plan & Design: `/ccg:spec-plan`
-   3. Implement: `/ccg:spec-impl` (Includes auto-review & archive)
+   3. Implement: `/ccg:spec-impl` (Includes implementation & archive)
 
    **Standalone Tools (Available Anytime)**
    - Code Review: `/ccg:spec-review` (Independent dual-model review)

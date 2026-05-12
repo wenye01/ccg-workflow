@@ -156,4 +156,3 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 1. **仅分析不修改** – 本命令不执行任何代码变更
 2. **信任规则** – 后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准
-3. 外部模型对文件系统**零写入权限**

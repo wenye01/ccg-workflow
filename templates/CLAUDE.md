@@ -47,8 +47,8 @@
 |----------|--------------|------|
 | `workflow.md` | `/ccg:workflow` | 多模型协作开发工作流（研究→构思→计划→执行→优化→评审），智能路由前端/后端 |
 | `plan.md` | `/ccg:plan` | 多模型协作规划：上下文检索 + 双模型分析 → 生成 Step-by-step 实施计划 |
-| `execute.md` | `/ccg:execute` | 多模型协作执行：根据计划获取原型 → Claude 重构实施 → 多模型审计交付 |
-| `codex-exec.md` | `/ccg:codex-exec` | 后端模型全权执行计划：MCP 搜索 + 代码实现 + 测试，多模型审核 |
+| `execute.md` | `/ccg:execute` | 多模型协作执行：根据计划多模型直接实施 → 返回执行结果 |
+| `codex-exec.md` | `/ccg:codex-exec` | 后端模型全权执行计划：MCP 搜索 + 代码实现 + 测试，返回 batch 结果 |
 | `feat.md` | `/ccg:feat` | 智能功能开发：自动识别输入类型，规划/讨论/实施全流程 |
 | `frontend.md` | `/ccg:frontend` | 前端专项工作流（研究→构思→计划→执行→优化→评审），前端主模型主导 |
 | `backend.md` | `/ccg:backend` | 后端专项工作流（研究→构思→计划→执行→优化→评审），后端主模型主导 |
