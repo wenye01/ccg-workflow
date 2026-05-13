@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultConfig, createDefaultRouting } from '../config'
+import { createDefaultConfig, createDefaultRouting, mergeConfigs } from '../config'
 
 describe('createDefaultRouting', () => {
   it('returns gemini as frontend primary', () => {
@@ -87,5 +87,39 @@ describe('createDefaultConfig', () => {
     const routing = createDefaultRouting()
     const config = createDefaultConfig({ ...baseOptions, routing })
     expect(config.routing).toEqual(routing)
+  })
+})
+
+describe('mergeConfigs', () => {
+  it('lets local routing override selected global routing fields', () => {
+    const globalConfig = createDefaultConfig({
+      language: 'zh-CN',
+      routing: createDefaultRouting(),
+      installedWorkflows: ['workflow'],
+      mcpProvider: 'ace-tool',
+    })
+
+    const merged = mergeConfigs(globalConfig, {
+      routing: {
+        frontend: { models: ['codex'], primary: 'codex' },
+        geminiModel: 'gemini-2.5-flash',
+      } as any,
+      performance: { liteMode: true },
+    })
+
+    expect(merged.routing.frontend.primary).toBe('codex')
+    expect(merged.routing.backend.primary).toBe('codex')
+    expect(merged.routing.geminiModel).toBe('gemini-2.5-flash')
+    expect(merged.performance?.liteMode).toBe(true)
+  })
+
+  it('preserves global values when local config is empty', () => {
+    const globalConfig = createDefaultConfig({
+      language: 'en',
+      routing: createDefaultRouting(),
+      installedWorkflows: ['workflow', 'plan'],
+    })
+
+    expect(mergeConfigs(globalConfig, {})).toEqual(globalConfig)
   })
 })

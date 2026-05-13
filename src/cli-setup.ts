@@ -103,6 +103,8 @@ export async function setupCommands(cli: CAC): Promise<void> {
     .option('--mode, -m <mode>', i18n.t('cli:help.optionDescriptions.collaborationMode'))
     .option('--workflows, -w <workflows>', i18n.t('cli:help.optionDescriptions.workflows'))
     .option('--install-dir, -d <path>', i18n.t('cli:help.optionDescriptions.installDir'))
+    .option('--local', 'Install to project .claude/ directory')
+    .option('--project-root <path>', 'Specify project root directory')
     .action(async (options: CliOptions) => {
       if (options.lang) {
         await initI18n(options.lang)

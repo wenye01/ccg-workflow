@@ -10,6 +10,8 @@ export interface CliOptions {
   mode?: CollaborationMode
   workflows?: string
   installDir?: string
+  local?: boolean
+  projectRoot?: string
 }
 
 export type { CcgConfig, CollaborationMode, SupportedLang }

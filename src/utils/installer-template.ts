@@ -176,11 +176,11 @@ export function injectConfigVariables(content: string, config: {
  * Windows Git Bash requires forward slashes in heredoc (backslashes get escaped).
  * PowerShell and CMD also support forward slashes for most commands.
  */
-export function replaceHomePathsInTemplate(content: string, installDir: string, ccgPrivateDir = CCG_PRIVATE_DIR): string {
+export function replaceHomePathsInTemplate(content: string, installDir: string, ccgPrivateDir = CCG_PRIVATE_DIR, ccgBinDir?: string): string {
   // Get absolute paths for replacement
   const userHome = homedir()
   const ccgDir = ccgPrivateDir
-  const binDir = ccgPrivateDir === CCG_PRIVATE_DIR ? CCG_BIN_DIR : join(ccgPrivateDir, 'bin')
+  const binDir = ccgBinDir ?? (ccgPrivateDir === CCG_PRIVATE_DIR ? CCG_BIN_DIR : join(ccgPrivateDir, 'bin'))
   const claudeDir = installDir // ~/.claude
 
   // IMPORTANT: Always use forward slashes for cross-platform compatibility

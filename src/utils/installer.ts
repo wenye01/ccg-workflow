@@ -1,4 +1,4 @@
-import type { InstallResult } from '../types'
+import type { InstallResult, ResolvedPaths } from '../types'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import { basename, join } from 'pathe'
@@ -82,10 +82,25 @@ interface InstallConfig {
 interface InstallContext {
   installDir: string
   ccgPrivateDir: string
+  ccgBinDir: string
+  skipBinary: boolean
   force: boolean
   config: InstallConfig
   templateDir: string
   result: InstallResult
+}
+
+interface InstallWorkflowsConfig {
+  routing?: {
+    mode?: string
+    frontend?: { models?: string[], primary?: string }
+    backend?: { models?: string[], primary?: string }
+    review?: { models?: string[] }
+    geminiModel?: string
+  }
+  liteMode?: boolean
+  mcpProvider?: string
+  skipImpeccable?: boolean
 }
 
 function getCcgPromptsDir(ccgPrivateDir: string): string {
@@ -98,6 +113,14 @@ function getCcgBinDir(ccgPrivateDir: string): string {
 
 function resolveCcgPrivateDir(installDir: string, ccgPrivateDir?: string): string {
   return ccgPrivateDir ?? (installDir === CLAUDE_DIR ? CCG_PRIVATE_DIR : join(installDir, '.ccg'))
+}
+
+function isResolvedPaths(value: unknown): value is ResolvedPaths {
+  return typeof value === 'object'
+    && value !== null
+    && 'claudeDir' in value
+    && 'ccgPrivateDir' in value
+    && 'ccgBinDir' in value
 }
 
 // ═══════════════════════════════════════════════════════
@@ -214,7 +237,7 @@ async function copyMdTemplates(
     if (ctx.force || !(await fs.pathExists(destFile))) {
       let content = await fs.readFile(join(srcDir, file), 'utf-8')
       if (options.inject) content = injectConfigVariables(content, ctx.config)
-      content = replaceHomePathsInTemplate(content, ctx.installDir, ctx.ccgPrivateDir)
+      content = replaceHomePathsInTemplate(content, ctx.installDir, ctx.ccgPrivateDir, ctx.ccgBinDir)
       await fs.writeFile(destFile, content, 'utf-8')
       installed.push(file.replace('.md', ''))
     }
@@ -248,7 +271,7 @@ async function installCommandFiles(ctx: InstallContext, workflowIds: string[]): 
           if (ctx.force || !(await fs.pathExists(destFile))) {
             let content = await fs.readFile(srcFile, 'utf-8')
             content = injectConfigVariables(content, ctx.config)
-            content = replaceHomePathsInTemplate(content, ctx.installDir, ctx.ccgPrivateDir)
+            content = replaceHomePathsInTemplate(content, ctx.installDir, ctx.ccgPrivateDir, ctx.ccgBinDir)
             await fs.writeFile(destFile, content, 'utf-8')
           }
           // Count as installed whether written or already existing
@@ -433,7 +456,7 @@ async function installSkillFiles(ctx: InstallContext): Promise<void> {
         }
         else if (entry.name.endsWith('.md')) {
           const content = await fs.readFile(fullPath, 'utf-8')
-          const processed = replaceHomePathsInTemplate(content, ctx.installDir, ctx.ccgPrivateDir)
+          const processed = replaceHomePathsInTemplate(content, ctx.installDir, ctx.ccgPrivateDir, ctx.ccgBinDir)
           if (processed !== content) {
             await fs.writeFile(fullPath, processed, 'utf-8')
           }
@@ -627,8 +650,14 @@ export function showBinaryDownloadWarning(binDir: string): void {
  * Skips download if binary already exists and passes `--version` check.
  */
 async function installBinaryFile(ctx: InstallContext): Promise<void> {
+  if (ctx.skipBinary) {
+    ctx.result.binPath = ctx.ccgBinDir
+    ctx.result.binInstalled = await verifyBinary(undefined, CCG_PRIVATE_DIR)
+    return
+  }
+
   try {
-    const binDir = getCcgBinDir(ctx.ccgPrivateDir)
+    const binDir = ctx.ccgBinDir
     await fs.ensureDir(binDir)
 
     const binaryName = getBinaryName()
@@ -691,35 +720,50 @@ async function installBinaryFile(ctx: InstallContext): Promise<void> {
 export async function installWorkflows(
   workflowIds: string[],
   installDir: string,
-  force = false,
-  config?: {
-    routing?: {
-      mode?: string
-      frontend?: { models?: string[], primary?: string }
-      backend?: { models?: string[], primary?: string }
-      review?: { models?: string[] }
-    }
-    liteMode?: boolean
-    mcpProvider?: string
-    skipImpeccable?: boolean
+  force?: boolean,
+  config?: InstallWorkflowsConfig,
+  ccgPrivateDir?: string,
+): Promise<InstallResult>
+export async function installWorkflows(
+  workflowIds: string[],
+  paths: ResolvedPaths,
+  options?: {
+    force?: boolean
+    config?: InstallWorkflowsConfig
   },
+): Promise<InstallResult>
+export async function installWorkflows(
+  workflowIds: string[],
+  installDirOrPaths: string | ResolvedPaths,
+  forceOrOptions: boolean | {
+    force?: boolean
+    config?: InstallWorkflowsConfig
+  } = false,
+  config?: InstallWorkflowsConfig,
   ccgPrivateDir?: string,
 ): Promise<InstallResult> {
-  const resolvedCcgPrivateDir = resolveCcgPrivateDir(installDir, ccgPrivateDir)
+  const paths = isResolvedPaths(installDirOrPaths) ? installDirOrPaths : null
+  const installDir = paths?.claudeDir ?? installDirOrPaths as string
+  const resolvedCcgPrivateDir = paths?.ccgPrivateDir ?? resolveCcgPrivateDir(installDir, ccgPrivateDir)
+  const resolvedCcgBinDir = paths?.ccgBinDir ?? getCcgBinDir(resolvedCcgPrivateDir)
+  const force = paths ? !!(forceOrOptions as { force?: boolean }).force : forceOrOptions as boolean
+  const installConfig = paths ? (forceOrOptions as { config?: InstallWorkflowsConfig }).config : config
   const ctx: InstallContext = {
     installDir,
     ccgPrivateDir: resolvedCcgPrivateDir,
+    ccgBinDir: resolvedCcgBinDir,
+    skipBinary: paths?.scope === 'local',
     force,
     config: {
-      routing: config?.routing as InstallConfig['routing'] || {
+      routing: installConfig?.routing as InstallConfig['routing'] || {
         mode: 'smart',
         frontend: { models: ['gemini'], primary: 'gemini' },
         backend: { models: ['codex'], primary: 'codex' },
         review: { models: ['codex', 'gemini'] },
       },
-      liteMode: config?.liteMode || false,
-      mcpProvider: config?.mcpProvider || 'ace-tool',
-      skipImpeccable: config?.skipImpeccable || false,
+      liteMode: installConfig?.liteMode || false,
+      mcpProvider: installConfig?.mcpProvider || 'ace-tool',
+      skipImpeccable: installConfig?.skipImpeccable || false,
     },
     templateDir: join(PACKAGE_ROOT, 'templates'),
     result: {

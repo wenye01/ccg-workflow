@@ -81,6 +81,8 @@ export interface InitOptions {
   mode?: CollaborationMode
   workflows?: string
   installDir?: string
+  local?: boolean
+  projectRoot?: string
 }
 
 // 安装结果
@@ -111,3 +113,4 @@ export interface FastContextConfig {
 
 // Re-export CLI types
 export * from './cli'
+export type { InstallScope, ResolvedPaths } from '../utils/paths'

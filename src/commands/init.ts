@@ -6,12 +6,11 @@ import ora from 'ora'
 import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { i18n, initI18n } from '../i18n'
-import { createDefaultConfig, ensureCcgDir, getCcgDir, readCcgConfig, writeCcgConfig } from '../utils/config'
-import { getAllCommandIds, installAceTool, installAceToolRs, installContextWeaver, installFastContext, installMcpServer, installWorkflows, showBinaryDownloadWarning, syncMcpToCodex, syncMcpToGemini, writeFastContextPrompt } from '../utils/installer'
-import { isWindows } from '../utils/platform'
+import { createDefaultConfig, ensureCcgDir, readEffectiveConfig, writeCcgConfig } from '../utils/config'
+import { getAllCommandIds, installAceTool, installContextWeaver, installFastContext, installMcpServer, installWorkflows, showBinaryDownloadWarning, syncMcpToCodex, syncMcpToGemini, writeFastContextPrompt } from '../utils/installer'
 import { migrateToV2_2_0, needsMigration } from '../utils/migration'
 import { createEmptyManifest, readManifest, writeManifest } from '../utils/manifest'
-import { CCG_BIN_DIR, CCG_MANIFEST_FILE, CLAUDE_DIR } from '../utils/paths'
+import { CCG_BIN_DIR, resolvePaths } from '../utils/paths'
 
 /**
  * Auto-approve codeagent-wrapper Bash commands in settings.json.
@@ -186,9 +185,17 @@ async function installGrokSearchMcp(keys: {
 }
 
 export async function init(options: InitOptions = {}): Promise<void> {
+  const scope = options.local ? 'local' : 'global'
+  const paths = resolvePaths(scope, options.projectRoot)
+  const isLocal = paths.scope === 'local'
+  const skipMcpOps = options.skipMcp || isLocal
+
   console.log()
   console.log(ansis.cyan.bold(`  CCG - Claude + Codex + Gemini`))
   console.log(ansis.gray(`  Multi-Model Collaboration Workflow`))
+  if (isLocal) {
+    console.log(ansis.gray(`  Local install → ${paths.projectRoot}`))
+  }
   console.log()
 
   // ═══════════════════════════════════════════════════════
@@ -198,7 +205,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
   if (!options.skipPrompt) {
     // Check if user already has a language preference
-    const existingConfig = await readCcgConfig()
+    const existingConfig = await readEffectiveConfig(paths)
     const savedLang = existingConfig?.general?.language
 
     if (savedLang) {
@@ -236,7 +243,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
   // Non-interactive mode: preserve existing config
   if (options.skipPrompt) {
-    const existingConfig = await readCcgConfig()
+    const existingConfig = await readEffectiveConfig(paths)
     if (existingConfig?.routing) {
       frontendModels = existingConfig.routing.frontend?.models || ['gemini']
       backendModels = existingConfig.routing.backend?.models || ['codex']
@@ -272,14 +279,14 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // Non-interactive mode (--skip-prompt): preserve existing settings
   // ═══════════════════════════════════════════════════════
   if (options.skipPrompt) {
-    const existingConfig = await readCcgConfig()
+    const existingConfig = await readEffectiveConfig(paths)
     if (existingConfig?.performance?.liteMode !== undefined) {
       liteMode = existingConfig.performance.liteMode
     }
     if (existingConfig?.performance?.skipImpeccable !== undefined) {
       skipImpeccable = existingConfig.performance.skipImpeccable
     }
-    if (options.skipMcp) {
+    if (skipMcpOps) {
       // Fix #124: preserve existing MCP provider from config during update
       mcpProvider = existingConfig?.mcp?.provider || 'skip'
     }
@@ -293,7 +300,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // and restart if they mistyped a URL/KEY.
   // ═══════════════════════════════════════════════════════
   if (!options.skipPrompt) {
-    const existingConfig = await readCcgConfig()
+    const existingConfig = await readEffectiveConfig(paths)
 
     // Initialize from existing config so re-running init shows saved values as defaults
     if (existingConfig?.routing) {
@@ -447,7 +454,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
 
     async function runMcpStep(canGoBack: boolean): Promise<StepReturn> {
-      if (options.skipMcp) {
+      if (skipMcpOps) {
         mcpProvider = existingConfig?.mcp?.provider || 'skip'
         return 'next'
       }
@@ -831,7 +838,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
   try {
     // v2.2.0: Auto-migrate CCG private data out of ~/.claude/
-    if (await needsMigration()) {
+    if (!isLocal && await needsMigration()) {
       spinner.text = 'Migrating CCG private data to ~/.ccg/...'
       const migrationResult = await migrateToV2_2_0()
 
@@ -862,7 +869,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
       }
     }
 
-    await ensureCcgDir()
+    await ensureCcgDir(paths.ccgPrivateDir)
 
     // Create config
     const config = createDefaultConfig({
@@ -873,24 +880,35 @@ export async function init(options: InitOptions = {}): Promise<void> {
       liteMode,
       skipImpeccable,
     })
+    config.paths = {
+      commands: paths.claudeCommandsDir,
+      prompts: paths.ccgPromptsDir,
+      backup: paths.ccgBackupDir,
+    }
 
     // Save config FIRST - ensure it's created even if installation fails
-    await writeCcgConfig(config)
+    await writeCcgConfig(config, paths.ccgConfigFile)
 
     // Install workflows and commands
-    const installDir = options.installDir || CLAUDE_DIR
-    const result = await installWorkflows(selectedWorkflows, installDir, options.force, {
+    const installDir = !isLocal && options.installDir ? options.installDir : paths.claudeDir
+    const installConfig = {
       routing,
       liteMode,
       mcpProvider,
       skipImpeccable,
-    })
+    }
+    const result = !isLocal && options.installDir
+      ? await installWorkflows(selectedWorkflows, installDir, options.force, installConfig)
+      : await installWorkflows(selectedWorkflows, paths, {
+          force: options.force,
+          config: installConfig,
+        })
 
     // Install selected MCP tools (multiple can be installed)
     spinner.succeed(ansis.green(i18n.t('init:installSuccess')))
 
     // ace-tool
-    if (aceToolToken) {
+    if (!isLocal && aceToolToken) {
       spinner.text = i18n.t('init:aceTool.installing')
       const aceResult = await installAceTool({ baseUrl: aceToolBaseUrl, token: aceToolToken })
       if (aceResult.success) {
@@ -902,7 +920,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
 
     // fast-context
-    if (wantFastContext) {
+    if (!isLocal && wantFastContext) {
       const fcResult = await installFastContext({
         apiKey: fastContextApiKey || undefined,
         includeSnippets: fastContextIncludeSnippets,
@@ -919,7 +937,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
 
     // contextweaver
-    if (contextWeaverApiKey) {
+    if (!isLocal && contextWeaverApiKey) {
       spinner.text = i18n.t('init:mcp.cwConfiguring')
       const cwResult = await installContextWeaver({ siliconflowApiKey: contextWeaverApiKey })
       if (cwResult.success) {
@@ -936,7 +954,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     const settingsPath = join(installDir, 'settings.json')
 
     // Save API configuration if provided
-    if (apiUrl && apiKey) {
+    if (!isLocal && apiUrl && apiKey) {
       let settings: Record<string, any> = {}
       if (await fs.pathExists(settingsPath)) {
         settings = await fs.readJSON(settingsPath)
@@ -970,13 +988,15 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log(`    ${ansis.green('✓')} API ${ansis.gray(`→ ${settingsPath}`)}`)
     }
 
-    // Always install codeagent-wrapper auto-approve via permissions.allow
-    await installHook(settingsPath)
-    console.log()
-    console.log(`    ${ansis.green('✓')} ${i18n.t('init:hooks.installed')} ${ansis.gray('(permissions.allow)')}`)
+    // Always install codeagent-wrapper auto-approve via permissions.allow for global installs.
+    if (!isLocal) {
+      await installHook(settingsPath)
+      console.log()
+      console.log(`    ${ansis.green('✓')} ${i18n.t('init:hooks.installed')} ${ansis.gray('(permissions.allow)')}`)
+    }
 
     // Install grok-search MCP if requested
-    if (wantGrokSearch && (tavilyKey || firecrawlKey || grokApiUrl || grokApiKey)) {
+    if (!isLocal && wantGrokSearch && (tavilyKey || firecrawlKey || grokApiUrl || grokApiKey)) {
       spinner.text = i18n.t('init:grok.installing')
       const grokResult = await installGrokSearchMcp({
         tavilyKey,
@@ -1000,7 +1020,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
 
     // Install context7 MCP + Codex sync (skip when --skip-mcp is passed)
-    if (!options.skipMcp) {
+    if (!skipMcpOps) {
       const context7Result = await installMcpServer(
         'context7',
         'npx',
@@ -1113,7 +1133,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
 
     // Show binary installation result
-    if (result.binInstalled && result.binPath) {
+    if (!isLocal && result.binInstalled && result.binPath) {
       console.log()
       console.log(ansis.cyan(`  ${i18n.t('init:installedBinary')}`))
       console.log(`    ${ansis.green('✓')} codeagent-wrapper ${ansis.gray(`→ ${result.binPath}`)}`)
@@ -1165,9 +1185,9 @@ export async function init(options: InitOptions = {}): Promise<void> {
             else {
               const configLine = `\n# CCG multi-model collaboration system\n${exportCommand}\n`
               await fs.appendFile(shellRc, configLine, 'utf-8')
-              const manifest = await readManifest(CCG_MANIFEST_FILE) ?? createEmptyManifest()
+              const manifest = await readManifest(paths.ccgManifestFile) ?? createEmptyManifest()
               manifest.shellRc = { file: shellRc, line: exportCommand }
-              await writeManifest(manifest, CCG_MANIFEST_FILE)
+              await writeManifest(manifest, paths.ccgManifestFile)
               console.log(`    ${ansis.green('✓')} PATH ${ansis.gray(`→ ${shellRcDisplay}`)}`)
             }
           }
@@ -1181,7 +1201,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
         }
       }
     }
-    else {
+    else if (!isLocal) {
       // Binary download failed — show prominent warning with manual fix instructions
       showBinaryDownloadWarning(CCG_BIN_DIR)
     }
