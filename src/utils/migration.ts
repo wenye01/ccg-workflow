@@ -1,11 +1,11 @@
 /**
- * Migration utilities for v1.4.0
- * Handles automatic migration from old directory structure to new one
+ * Migration utilities for CCG private data isolation.
  */
 
 import fs from 'fs-extra'
-import { homedir } from 'node:os'
-import { join } from 'pathe'
+import { dirname, join } from 'pathe'
+import { parse, stringify } from 'smol-toml'
+import { CCG_BACKUP_DIR, CCG_BIN_DIR, CCG_CONFIG_FILE, CCG_PRIVATE_DIR, CCG_PROMPTS_DIR, CLAUDE_COMMANDS_DIR, LEGACY_BIN_DIR, LEGACY_CCG_DIR, LEGACY_PROMPTS_DIR } from './paths'
 
 export interface MigrationResult {
   success: boolean
@@ -14,14 +14,63 @@ export interface MigrationResult {
   skipped: string[]
 }
 
+export async function migrateToV1_4_0(): Promise<MigrationResult> {
+  return migrateToV2_2_0()
+}
+
+async function copyIfMissing(src: string, dest: string, label: string, result: MigrationResult): Promise<void> {
+  if (!(await fs.pathExists(src))) {
+    result.skipped.push(`${label} (does not exist, nothing to migrate)`)
+    return
+  }
+  if (await fs.pathExists(dest)) {
+    result.skipped.push(`${label} (target already exists)`)
+    return
+  }
+
+  await fs.ensureDir(dirname(dest))
+  await fs.copy(src, dest)
+  await fs.remove(src)
+  result.migratedFiles.push(`${label}`)
+}
+
+async function removeDirIfEmpty(dir: string): Promise<void> {
+  if (!(await fs.pathExists(dir))) return
+  const entries = await fs.readdir(dir)
+  if (entries.length === 0) await fs.remove(dir)
+}
+
+async function updateMigratedConfig(result: MigrationResult): Promise<void> {
+  if (!(await fs.pathExists(CCG_CONFIG_FILE))) return
+
+  try {
+    const content = await fs.readFile(CCG_CONFIG_FILE, 'utf-8')
+    const config = parse(content) as any
+    config.paths = {
+      ...(config.paths || {}),
+      commands: CLAUDE_COMMANDS_DIR,
+      prompts: CCG_PROMPTS_DIR,
+      backup: CCG_BACKUP_DIR,
+    }
+    await fs.writeFile(CCG_CONFIG_FILE, stringify(config), 'utf-8')
+    result.migratedFiles.push('Updated ~/.ccg/config.toml paths')
+  }
+  catch (error) {
+    result.errors.push(`Failed to update migrated config.toml: ${error}`)
+    result.success = false
+  }
+}
+
 /**
- * Migrate from v1.3.x to v1.4.0
+ * Migrate from v2.1.x/v1.4.x layout to v2.2.0 isolated private directory.
  *
  * Changes:
- * 1. ~/.ccg/ → ~/.claude/.ccg/
- * 2. ~/.claude/prompts/ccg/ → ~/.claude/.ccg/prompts/
+ * 1. ~/.claude/.ccg/config.toml → ~/.ccg/config.toml
+ * 2. ~/.claude/.ccg/prompts/    → ~/.ccg/prompts/
+ * 3. ~/.claude/.ccg/backup/     → ~/.ccg/backup/
+ * 4. ~/.claude/bin/codeagent-wrapper(.exe) → ~/.ccg/bin/codeagent-wrapper(.exe)
  */
-export async function migrateToV1_4_0(): Promise<MigrationResult> {
+export async function migrateToV2_2_0(): Promise<MigrationResult> {
   const result: MigrationResult = {
     success: true,
     migratedFiles: [],
@@ -29,91 +78,46 @@ export async function migrateToV1_4_0(): Promise<MigrationResult> {
     skipped: [],
   }
 
-  const oldCcgDir = join(homedir(), '.ccg')
-  const newCcgDir = join(homedir(), '.claude', '.ccg')
-  const oldPromptsDir = join(homedir(), '.claude', 'prompts', 'ccg')
-  const newPromptsDir = join(newCcgDir, 'prompts')
-
   try {
-    // Ensure new config directory exists
-    await fs.ensureDir(newCcgDir)
+    await fs.ensureDir(CCG_PRIVATE_DIR)
 
-    // 1. Migrate ~/.ccg/ → ~/.claude/.ccg/
-    if (await fs.pathExists(oldCcgDir)) {
-      const files = await fs.readdir(oldCcgDir)
-      for (const file of files) {
-        const srcFile = join(oldCcgDir, file)
-        const destFile = join(newCcgDir, file)
+    await copyIfMissing(
+      join(LEGACY_CCG_DIR, 'config.toml'),
+      CCG_CONFIG_FILE,
+      '~/.claude/.ccg/config.toml → ~/.ccg/config.toml',
+      result,
+    )
+    await copyIfMissing(
+      join(LEGACY_CCG_DIR, 'prompts'),
+      CCG_PROMPTS_DIR,
+      '~/.claude/.ccg/prompts/ → ~/.ccg/prompts/',
+      result,
+    )
+    await copyIfMissing(
+      LEGACY_PROMPTS_DIR,
+      CCG_PROMPTS_DIR,
+      '~/.claude/prompts/ccg/ → ~/.ccg/prompts/',
+      result,
+    )
+    await copyIfMissing(
+      join(LEGACY_CCG_DIR, 'backup'),
+      CCG_BACKUP_DIR,
+      '~/.claude/.ccg/backup/ → ~/.ccg/backup/',
+      result,
+    )
 
-        try {
-          // Skip if destination already exists (don't overwrite)
-          if (await fs.pathExists(destFile)) {
-            result.skipped.push(`~/.ccg/${file} (already exists in new location)`)
-            continue
-          }
+    const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
+    await copyIfMissing(
+      join(LEGACY_BIN_DIR, wrapperName),
+      join(CCG_BIN_DIR, wrapperName),
+      `~/.claude/bin/${wrapperName} → ~/.ccg/bin/${wrapperName}`,
+      result,
+    )
 
-          // Copy file or directory
-          await fs.copy(srcFile, destFile)
-          result.migratedFiles.push(`~/.ccg/${file} → ~/.claude/.ccg/${file}`)
-        }
-        catch (error) {
-          result.errors.push(`Failed to migrate ${file}: ${error}`)
-          result.success = false
-        }
-      }
+    await updateMigratedConfig(result)
 
-      // Remove old directory (only if migration succeeded and it's empty)
-      try {
-        const remaining = await fs.readdir(oldCcgDir)
-        if (remaining.length === 0) {
-          await fs.remove(oldCcgDir)
-          result.migratedFiles.push('Removed old ~/.ccg/ directory')
-        }
-        else {
-          result.skipped.push(`~/.ccg/ (not empty, keeping for safety)`)
-        }
-      }
-      catch (error) {
-        // It's okay if we can't remove the old directory
-        result.skipped.push(`~/.ccg/ (could not remove: ${error})`)
-      }
-    }
-    else {
-      result.skipped.push('~/.ccg/ (does not exist, nothing to migrate)')
-    }
-
-    // 2. Migrate ~/.claude/prompts/ccg/ → ~/.claude/.ccg/prompts/
-    if (await fs.pathExists(oldPromptsDir)) {
-      try {
-        // Skip if destination already exists
-        if (await fs.pathExists(newPromptsDir)) {
-          result.skipped.push('~/.claude/prompts/ccg/ (already exists in new location)')
-        }
-        else {
-          await fs.copy(oldPromptsDir, newPromptsDir)
-          result.migratedFiles.push('~/.claude/prompts/ccg/ → ~/.claude/.ccg/prompts/')
-
-          // Remove old directory
-          await fs.remove(oldPromptsDir)
-          result.migratedFiles.push('Removed old ~/.claude/prompts/ccg/ directory')
-
-          // Try to remove parent directory if empty
-          const promptsParentDir = join(homedir(), '.claude', 'prompts')
-          const remaining = await fs.readdir(promptsParentDir)
-          if (remaining.length === 0) {
-            await fs.remove(promptsParentDir)
-            result.migratedFiles.push('Removed empty ~/.claude/prompts/ directory')
-          }
-        }
-      }
-      catch (error) {
-        result.errors.push(`Failed to migrate prompts: ${error}`)
-        result.success = false
-      }
-    }
-    else {
-      result.skipped.push('~/.claude/prompts/ccg/ (does not exist, nothing to migrate)')
-    }
+    await removeDirIfEmpty(LEGACY_CCG_DIR)
+    await removeDirIfEmpty(LEGACY_BIN_DIR)
   }
   catch (error) {
     result.errors.push(`Migration failed: ${error}`)
@@ -127,13 +131,9 @@ export async function migrateToV1_4_0(): Promise<MigrationResult> {
  * Check if migration is needed
  */
 export async function needsMigration(): Promise<boolean> {
-  const oldCcgDir = join(homedir(), '.ccg')
-  const oldPromptsDir = join(homedir(), '.claude', 'prompts', 'ccg')
-  const oldConfigFile = join(homedir(), '.claude', 'commands', 'ccg', '_config.md')
+  const hasLegacyPrivateDir = await fs.pathExists(LEGACY_CCG_DIR)
+  const hasLegacyPromptsDir = await fs.pathExists(LEGACY_PROMPTS_DIR)
+  const hasLegacyBinary = await fs.pathExists(join(LEGACY_BIN_DIR, process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'))
 
-  const hasOldCcgDir = await fs.pathExists(oldCcgDir)
-  const hasOldPromptsDir = await fs.pathExists(oldPromptsDir)
-  const hasOldConfigFile = await fs.pathExists(oldConfigFile)
-
-  return hasOldCcgDir || hasOldPromptsDir || hasOldConfigFile
+  return hasLegacyPrivateDir || hasLegacyPromptsDir || hasLegacyBinary
 }

@@ -9,7 +9,9 @@ import { i18n, initI18n } from '../i18n'
 import { createDefaultConfig, ensureCcgDir, getCcgDir, readCcgConfig, writeCcgConfig } from '../utils/config'
 import { getAllCommandIds, installAceTool, installAceToolRs, installContextWeaver, installFastContext, installMcpServer, installWorkflows, showBinaryDownloadWarning, syncMcpToCodex, syncMcpToGemini, writeFastContextPrompt } from '../utils/installer'
 import { isWindows } from '../utils/platform'
-import { migrateToV1_4_0, needsMigration } from '../utils/migration'
+import { migrateToV2_2_0, needsMigration } from '../utils/migration'
+import { createEmptyManifest, readManifest, writeManifest } from '../utils/manifest'
+import { CCG_BIN_DIR, CCG_MANIFEST_FILE, CLAUDE_DIR } from '../utils/paths'
 
 /**
  * Auto-approve codeagent-wrapper Bash commands in settings.json.
@@ -828,10 +830,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
   const spinner = ora(i18n.t('init:installing')).start()
 
   try {
-    // v1.4.0: Auto-migrate from old directory structure
+    // v2.2.0: Auto-migrate CCG private data out of ~/.claude/
     if (await needsMigration()) {
-      spinner.text = 'Migrating from v1.3.x to v1.4.0...'
-      const migrationResult = await migrateToV1_4_0()
+      spinner.text = 'Migrating CCG private data to ~/.ccg/...'
+      const migrationResult = await migrateToV2_2_0()
 
       if (migrationResult.migratedFiles.length > 0) {
         spinner.info(ansis.cyan('Migration completed:'))
@@ -876,7 +878,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     await writeCcgConfig(config)
 
     // Install workflows and commands
-    const installDir = options.installDir || join(homedir(), '.claude')
+    const installDir = options.installDir || CLAUDE_DIR
     const result = await installWorkflows(selectedWorkflows, installDir, options.force, {
       routing,
       liteMode,
@@ -956,8 +958,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
       if (!settings.permissions.allow)
         settings.permissions.allow = []
       const wrapperPerms = [
-        'Bash(~/.claude/bin/codeagent-wrapper --backend gemini*)',
-        'Bash(~/.claude/bin/codeagent-wrapper --backend codex*)',
+        'Bash(~/.ccg/bin/codeagent-wrapper --backend gemini*)',
+        'Bash(~/.ccg/bin/codeagent-wrapper --backend codex*)',
       ]
       for (const perm of wrapperPerms) {
         if (!settings.permissions.allow.includes(perm))
@@ -1127,7 +1129,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
           const currentPathNorm = currentPath.toLowerCase().replace(/\\$/g, '')
           const windowsPathNorm = windowsPath.toLowerCase()
 
-          if (!currentPathNorm.includes(windowsPathNorm) && !currentPathNorm.includes('.claude\\bin')) {
+          if (!currentPathNorm.includes(windowsPathNorm) && !currentPathNorm.includes('.ccg\\bin')) {
             const escapedPath = windowsPath.replace(/'/g, "''")
             const psScript = currentPath
               ? `$p=[System.Environment]::GetEnvironmentVariable('PATH','User');[System.Environment]::SetEnvironmentVariable('PATH',($p+';'+'${escapedPath}'),'User')`
@@ -1157,12 +1159,15 @@ export async function init(options: InitOptions = {}): Promise<void> {
               rcContent = await fs.readFile(shellRc, 'utf-8')
             }
 
-            if (rcContent.includes(result.binPath) || rcContent.includes('/.claude/bin')) {
+            if (rcContent.includes(result.binPath) || rcContent.includes('/.ccg/bin')) {
               console.log(`    ${ansis.green('✓')} PATH ${ansis.gray(`→ ${shellRcDisplay} (${i18n.t('init:pathAlreadyConfigured', { file: shellRcDisplay })})`)}`)
             }
             else {
               const configLine = `\n# CCG multi-model collaboration system\n${exportCommand}\n`
               await fs.appendFile(shellRc, configLine, 'utf-8')
+              const manifest = await readManifest(CCG_MANIFEST_FILE) ?? createEmptyManifest()
+              manifest.shellRc = { file: shellRc, line: exportCommand }
+              await writeManifest(manifest, CCG_MANIFEST_FILE)
               console.log(`    ${ansis.green('✓')} PATH ${ansis.gray(`→ ${shellRcDisplay}`)}`)
             }
           }
@@ -1178,7 +1183,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
     else {
       // Binary download failed — show prominent warning with manual fix instructions
-      showBinaryDownloadWarning(join(installDir, 'bin'))
+      showBinaryDownloadWarning(CCG_BIN_DIR)
     }
 
     // Show MCP resources if user skipped installation

@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import fs from 'fs-extra'
 import { dirname, join } from 'pathe'
+import { CCG_BIN_DIR, CCG_PRIVATE_DIR } from './paths'
 import { isWindows } from './platform'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -175,11 +176,11 @@ export function injectConfigVariables(content: string, config: {
  * Windows Git Bash requires forward slashes in heredoc (backslashes get escaped).
  * PowerShell and CMD also support forward slashes for most commands.
  */
-export function replaceHomePathsInTemplate(content: string, installDir: string): string {
+export function replaceHomePathsInTemplate(content: string, installDir: string, ccgPrivateDir = CCG_PRIVATE_DIR): string {
   // Get absolute paths for replacement
   const userHome = homedir()
-  const ccgDir = join(installDir, '.ccg')
-  const binDir = join(installDir, 'bin')
+  const ccgDir = ccgPrivateDir
+  const binDir = ccgPrivateDir === CCG_PRIVATE_DIR ? CCG_BIN_DIR : join(ccgPrivateDir, 'bin')
   const claudeDir = installDir // ~/.claude
 
   // IMPORTANT: Always use forward slashes for cross-platform compatibility
@@ -190,17 +191,20 @@ export function replaceHomePathsInTemplate(content: string, installDir: string):
   let processed = content
 
   // Order matters: replace longer patterns first to avoid partial matches
-  // 1. Replace ~/.claude/.ccg with absolute path (longest match first)
-  processed = processed.replace(/~\/\.claude\/\.ccg/g, toForwardSlash(ccgDir))
-
-  // 2. Replace ~/.claude/bin/codeagent-wrapper with absolute path + .exe on Windows
+  // 1. Replace wrapper binary paths with absolute ~/.ccg/bin path + .exe on Windows
   //    CRITICAL: Windows Git Bash requires explicit .exe extension
   const wrapperName = isWindows() ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
   const wrapperPath = `${toForwardSlash(binDir)}/${wrapperName}`
+  processed = processed.replace(/~\/\.ccg\/bin\/codeagent-wrapper/g, wrapperPath)
   processed = processed.replace(/~\/\.claude\/bin\/codeagent-wrapper/g, wrapperPath)
 
-  // 3. Replace ~/.claude/bin with absolute path (for other binaries)
+  // 2. Replace binary directory paths
+  processed = processed.replace(/~\/\.ccg\/bin/g, toForwardSlash(binDir))
   processed = processed.replace(/~\/\.claude\/bin/g, toForwardSlash(binDir))
+
+  // 3. Replace CCG private paths with absolute ~/.ccg paths
+  processed = processed.replace(/~\/\.claude\/\.ccg/g, toForwardSlash(ccgDir))
+  processed = processed.replace(/~\/\.ccg/g, toForwardSlash(ccgDir))
 
   // 4. Replace ~/.claude with absolute path
   processed = processed.replace(/~\/\.claude/g, toForwardSlash(claudeDir))

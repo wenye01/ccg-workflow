@@ -10,8 +10,9 @@ import { join } from 'pathe'
 import { checkForUpdates, compareVersions } from '../utils/version'
 import { showBinaryDownloadWarning, verifyBinary } from '../utils/installer'
 import { readCcgConfig, writeCcgConfig } from '../utils/config'
-import { migrateToV1_4_0, needsMigration } from '../utils/migration'
+import { migrateToV2_2_0, needsMigration } from '../utils/migration'
 import { i18n } from '../i18n'
+import { CCG_BIN_DIR, CCG_PROMPTS_DIR, CLAUDE_DIR } from '../utils/paths'
 
 const execAsync = promisify(exec)
 
@@ -271,7 +272,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   // Step 2: Auto-migrate from old directory structure (if needed)
   if (await needsMigration()) {
     spinner = ora(i18n.t('update:migrating')).start()
-    const migrationResult = await migrateToV1_4_0()
+    const migrationResult = await migrateToV2_2_0()
 
     if (migrationResult.migratedFiles.length > 0) {
       spinner.info(ansis.cyan(i18n.t('update:migrationDone')))
@@ -303,7 +304,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   // the user was left with nothing. New approach backs up first, installs new,
   // verifies, then cleans up backups. On failure, restores from backup.
 
-  const installDir = join(homedir(), '.claude')
+  const installDir = CLAUDE_DIR
   const BACKUP_SUFFIX = '.ccg-update-bak'
 
   // Directories to back up before installing new version
@@ -311,6 +312,8 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     join(installDir, 'commands', 'ccg'),
     join(installDir, 'agents', 'ccg'),
     join(installDir, 'skills', 'ccg'),
+    CCG_PROMPTS_DIR,
+    CCG_BIN_DIR,
   ]
 
   // Step 3: Back up existing files (move to *.ccg-update-bak)
@@ -402,14 +405,14 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
 
     // Verify binary exists, is functional, AND version matches
     if (!(await verifyBinary(installDir))) {
-      showBinaryDownloadWarning(join(installDir, 'bin'))
+      showBinaryDownloadWarning(CCG_BIN_DIR)
     }
     else {
       // Binary exists and runs, but check version
       const { verifyBinaryVersion } = await import('../utils/installer')
       const versionOk = await verifyBinaryVersion(installDir)
       if (!versionOk) {
-        showBinaryDownloadWarning(join(installDir, 'bin'))
+        showBinaryDownloadWarning(CCG_BIN_DIR)
       }
     }
   }

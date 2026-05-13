@@ -3,10 +3,10 @@
  * Adapted from zcf project's claude-config.ts and features.ts
  */
 
-import { homedir } from 'node:os'
 import { join } from 'pathe'
 import fs from 'fs-extra'
 import { getMcpCommand, isWindows } from './platform'
+import { CCG_BACKUP_DIR, CLAUDE_JSON_FILE } from './paths'
 
 /**
  * MCP Server Configuration interface
@@ -41,7 +41,7 @@ export interface ClaudeCodeConfig {
  * Get Claude Code config path (~/.claude.json)
  */
 export function getClaudeCodeConfigPath(): string {
-  return join(homedir(), '.claude.json')
+  return CLAUDE_JSON_FILE
 }
 
 /**
@@ -254,7 +254,7 @@ export async function backupClaudeCodeConfig(): Promise<string | null> {
       return null
     }
 
-    const backupDir = join(homedir(), '.claude', 'backup')
+    const backupDir = CCG_BACKUP_DIR
     await fs.ensureDir(backupDir)
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')

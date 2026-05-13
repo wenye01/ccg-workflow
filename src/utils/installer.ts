@@ -4,6 +4,8 @@ import fs from 'fs-extra'
 import { basename, join } from 'pathe'
 import { getWorkflowById } from './installer-data'
 import { PACKAGE_ROOT, injectConfigVariables, replaceHomePathsInTemplate } from './installer-template'
+import { commandFileName, collectRelativeFiles, createEmptyManifest, readManifest, uninstallWithManifest, writeManifest } from './manifest'
+import { CCG_BIN_DIR, CCG_PRIVATE_DIR, CCG_PROMPTS_DIR, CLAUDE_DIR } from './paths'
 import { installSkillCommands } from './skill-registry'
 
 // ═══════════════════════════════════════════════════════
@@ -79,10 +81,23 @@ interface InstallConfig {
 
 interface InstallContext {
   installDir: string
+  ccgPrivateDir: string
   force: boolean
   config: InstallConfig
   templateDir: string
   result: InstallResult
+}
+
+function getCcgPromptsDir(ccgPrivateDir: string): string {
+  return ccgPrivateDir === CCG_PRIVATE_DIR ? CCG_PROMPTS_DIR : join(ccgPrivateDir, 'prompts')
+}
+
+function getCcgBinDir(ccgPrivateDir: string): string {
+  return ccgPrivateDir === CCG_PRIVATE_DIR ? CCG_BIN_DIR : join(ccgPrivateDir, 'bin')
+}
+
+function resolveCcgPrivateDir(installDir: string, ccgPrivateDir?: string): string {
+  return ccgPrivateDir ?? (installDir === CLAUDE_DIR ? CCG_PRIVATE_DIR : join(installDir, '.ccg'))
 }
 
 // ═══════════════════════════════════════════════════════
@@ -199,7 +214,7 @@ async function copyMdTemplates(
     if (ctx.force || !(await fs.pathExists(destFile))) {
       let content = await fs.readFile(join(srcDir, file), 'utf-8')
       if (options.inject) content = injectConfigVariables(content, ctx.config)
-      content = replaceHomePathsInTemplate(content, ctx.installDir)
+      content = replaceHomePathsInTemplate(content, ctx.installDir, ctx.ccgPrivateDir)
       await fs.writeFile(destFile, content, 'utf-8')
       installed.push(file.replace('.md', ''))
     }
@@ -233,7 +248,7 @@ async function installCommandFiles(ctx: InstallContext, workflowIds: string[]): 
           if (ctx.force || !(await fs.pathExists(destFile))) {
             let content = await fs.readFile(srcFile, 'utf-8')
             content = injectConfigVariables(content, ctx.config)
-            content = replaceHomePathsInTemplate(content, ctx.installDir)
+            content = replaceHomePathsInTemplate(content, ctx.installDir, ctx.ccgPrivateDir)
             await fs.writeFile(destFile, content, 'utf-8')
           }
           // Count as installed whether written or already existing
@@ -285,7 +300,7 @@ async function installAgentFiles(ctx: InstallContext): Promise<void> {
  */
 async function installPromptFiles(ctx: InstallContext): Promise<void> {
   const promptsTemplateDir = join(ctx.templateDir, 'prompts')
-  const promptsDir = join(ctx.installDir, '.ccg', 'prompts')
+  const promptsDir = getCcgPromptsDir(ctx.ccgPrivateDir)
   if (!(await fs.pathExists(promptsTemplateDir))) {
     ctx.result.errors.push(`Prompts template directory not found: ${promptsTemplateDir}`)
     return
@@ -347,6 +362,23 @@ async function removeDirCollectMdNames(dir: string): Promise<string[]> {
   return names
 }
 
+async function removeDirIfEmpty(dir: string): Promise<void> {
+  if (!(await fs.pathExists(dir))) return
+  const entries = await fs.readdir(dir)
+  if (entries.length === 0) await fs.remove(dir)
+}
+
+async function removeEmptyDirsRecursive(dir: string): Promise<void> {
+  if (!(await fs.pathExists(dir))) return
+  const entries = await fs.readdir(dir, { withFileTypes: true })
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      await removeEmptyDirsRecursive(join(dir, entry.name))
+    }
+  }
+  await removeDirIfEmpty(dir)
+}
+
 /**
  * Install skill files from templates/skills/ → ~/.claude/skills/ccg/
  * Includes v1.7.73 legacy layout migration.
@@ -401,7 +433,7 @@ async function installSkillFiles(ctx: InstallContext): Promise<void> {
         }
         else if (entry.name.endsWith('.md')) {
           const content = await fs.readFile(fullPath, 'utf-8')
-          const processed = replaceHomePathsInTemplate(content, ctx.installDir)
+          const processed = replaceHomePathsInTemplate(content, ctx.installDir, ctx.ccgPrivateDir)
           if (processed !== content) {
             await fs.writeFile(fullPath, processed, 'utf-8')
           }
@@ -507,8 +539,8 @@ function getBinaryName(): string | null {
  * Check if codeagent-wrapper binary exists and is functional.
  * Returns true if the binary passes `--version` check.
  */
-export async function verifyBinary(installDir: string): Promise<boolean> {
-  const binDir = join(installDir, 'bin')
+export async function verifyBinary(_installDir?: string, ccgPrivateDir = CCG_PRIVATE_DIR): Promise<boolean> {
+  const binDir = getCcgBinDir(ccgPrivateDir)
   const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
   const wrapperPath = join(binDir, wrapperName)
 
@@ -528,8 +560,8 @@ export async function verifyBinary(installDir: string): Promise<boolean> {
  * Check if installed binary version matches expected version.
  * Returns true if version matches, false if outdated or unreadable.
  */
-export async function verifyBinaryVersion(installDir: string): Promise<boolean> {
-  const binDir = join(installDir, 'bin')
+export async function verifyBinaryVersion(_installDir?: string, ccgPrivateDir = CCG_PRIVATE_DIR): Promise<boolean> {
+  const binDir = getCcgBinDir(ccgPrivateDir)
   const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
   const wrapperPath = join(binDir, wrapperName)
 
@@ -596,7 +628,7 @@ export function showBinaryDownloadWarning(binDir: string): void {
  */
 async function installBinaryFile(ctx: InstallContext): Promise<void> {
   try {
-    const binDir = join(ctx.installDir, 'bin')
+    const binDir = getCcgBinDir(ctx.ccgPrivateDir)
     await fs.ensureDir(binDir)
 
     const binaryName = getBinaryName()
@@ -671,9 +703,12 @@ export async function installWorkflows(
     mcpProvider?: string
     skipImpeccable?: boolean
   },
+  ccgPrivateDir?: string,
 ): Promise<InstallResult> {
+  const resolvedCcgPrivateDir = resolveCcgPrivateDir(installDir, ccgPrivateDir)
   const ctx: InstallContext = {
     installDir,
+    ccgPrivateDir: resolvedCcgPrivateDir,
     force,
     config: {
       routing: config?.routing as InstallConfig['routing'] || {
@@ -711,8 +746,8 @@ export async function installWorkflows(
 
   // Ensure base directories
   await fs.ensureDir(join(installDir, 'commands', 'ccg'))
-  await fs.ensureDir(join(installDir, '.ccg'))
-  await fs.ensureDir(join(installDir, '.ccg', 'prompts'))
+  await fs.ensureDir(resolvedCcgPrivateDir)
+  await fs.ensureDir(getCcgPromptsDir(resolvedCcgPrivateDir))
 
   // Execute each install step
   await installCommandFiles(ctx, workflowIds)
@@ -722,6 +757,28 @@ export async function installWorkflows(
   await installSkillGeneratedCommands(ctx)
   await installRuleFiles(ctx)
   await installBinaryFile(ctx)
+
+  const manifest = await readManifest(join(resolvedCcgPrivateDir, 'manifest.json')) ?? createEmptyManifest()
+  manifest.commands = [...new Set([...manifest.commands, ...ctx.result.installedCommands.map(commandFileName)])].sort()
+  manifest.agents = await collectRelativeFiles(join(installDir, 'agents', 'ccg'))
+  manifest.skills = await collectRelativeFiles(join(installDir, 'skills', 'ccg'))
+  const ruleFiles = await collectRelativeFiles(join(installDir, 'rules'))
+  manifest.rules = ruleFiles.filter(file => file.startsWith('ccg-') && file.endsWith('.md')).sort()
+  manifest.settingsEntries.envVars = [
+    'ANTHROPIC_BASE_URL',
+    'ANTHROPIC_AUTH_TOKEN',
+    'DISABLE_TELEMETRY',
+    'DISABLE_ERROR_REPORTING',
+    'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+    'CLAUDE_CODE_ATTRIBUTION_HEADER',
+    'MCP_TIMEOUT',
+  ]
+  manifest.settingsEntries.permissions = [
+    'Bash(*codeagent-wrapper*)',
+    'Bash(~/.ccg/bin/codeagent-wrapper --backend gemini*)',
+    'Bash(~/.ccg/bin/codeagent-wrapper --backend codex*)',
+  ]
+  await writeManifest(manifest, join(resolvedCcgPrivateDir, 'manifest.json'))
 
   // ── Post-flight: validate installation produced results ──
   // Catch the case where all sub-steps silently returned empty
@@ -757,7 +814,7 @@ export interface UninstallResult {
  * Uninstall workflows by removing their command files.
  * @param options.preserveBinary — when true, skip binary removal (used during update)
  */
-export async function uninstallWorkflows(installDir: string, options?: { preserveBinary?: boolean }): Promise<UninstallResult> {
+export async function uninstallWorkflows(installDir: string, options?: { preserveBinary?: boolean, ccgPrivateDir?: string }): Promise<UninstallResult> {
   const result: UninstallResult = {
     success: true,
     removedCommands: [],
@@ -773,8 +830,64 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
   const agentsDir = join(installDir, 'agents', 'ccg')
   const skillsDir = join(installDir, 'skills', 'ccg')
   const rulesDir = join(installDir, 'rules')
-  const binDir = join(installDir, 'bin')
-  const ccgConfigDir = join(installDir, '.ccg')
+  const ccgConfigDir = resolveCcgPrivateDir(installDir, options?.ccgPrivateDir)
+  const binDir = getCcgBinDir(ccgConfigDir)
+  const manifestFile = join(ccgConfigDir, 'manifest.json')
+
+  const manifest = await readManifest(manifestFile)
+  if (manifest) {
+    const manifestResult = await uninstallWithManifest({
+      manifestFile,
+      claudeCommandsDir: commandsDir,
+      claudeAgentsDir: agentsDir,
+      claudeSkillsDir: skillsDir,
+      claudeRulesDir: rulesDir,
+      claudeOutputStylesDir: join(installDir, 'output-styles'),
+      claudeSettingsFile: join(installDir, 'settings.json'),
+    })
+
+    result.removedCommands = manifestResult.removedCommands.map(f => f.replace(/\.md$/, ''))
+    result.removedAgents = manifestResult.removedAgents.map(f => f.replace(/\.md$/, ''))
+    result.removedSkills = manifestResult.removedSkills
+    result.removedRules = manifestResult.removedRules.length > 0
+    result.errors.push(...manifestResult.errors)
+    result.success = manifestResult.errors.length === 0
+
+    for (const dir of [commandsDir, agentsDir, skillsDir]) {
+      try {
+        await removeEmptyDirsRecursive(dir)
+      }
+      catch { /* non-critical */ }
+    }
+
+    if (!options?.preserveBinary && await fs.pathExists(binDir)) {
+      try {
+        const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
+        const wrapperPath = join(binDir, wrapperName)
+        if (await fs.pathExists(wrapperPath)) {
+          await fs.remove(wrapperPath)
+          result.removedBin = true
+        }
+      }
+      catch (error) {
+        result.errors.push(`Failed to remove binary: ${error}`)
+        result.success = false
+      }
+    }
+
+    if (!options?.preserveBinary && await fs.pathExists(ccgConfigDir)) {
+      try {
+        await fs.remove(ccgConfigDir)
+        result.removedPrompts.push('ALL_PROMPTS_AND_CONFIGS')
+      }
+      catch (error) {
+        result.errors.push(`Failed to remove CCG private directory: ${error}`)
+        result.success = false
+      }
+    }
+
+    return result
+  }
 
   // Remove CCG commands directory
   try {
@@ -838,14 +951,14 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
     }
   }
 
-  // Remove .ccg config directory
-  if (await fs.pathExists(ccgConfigDir)) {
+  // Remove CCG private config directory
+  if (!options?.preserveBinary && await fs.pathExists(ccgConfigDir)) {
     try {
       await fs.remove(ccgConfigDir)
       result.removedPrompts.push('ALL_PROMPTS_AND_CONFIGS')
     }
     catch (error) {
-      result.errors.push(`Failed to remove .ccg directory: ${error}`)
+      result.errors.push(`Failed to remove CCG private directory: ${error}`)
     }
   }
 

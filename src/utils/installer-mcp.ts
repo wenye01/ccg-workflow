@@ -4,6 +4,8 @@ import fs from 'fs-extra'
 import { join } from 'pathe'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import { type McpServerConfig, backupClaudeCodeConfig, buildMcpServerConfig, fixWindowsMcpConfig, mergeMcpServers, readClaudeCodeConfig, writeClaudeCodeConfig } from './mcp'
+import { createEmptyManifest, readManifest, writeManifest, type CcgManifest } from './manifest'
+import { CCG_MANIFEST_FILE } from './paths'
 import { isWindows } from './platform'
 
 // ═══════════════════════════════════════════════════════
@@ -11,6 +13,12 @@ import { isWindows } from './platform'
 // ═══════════════════════════════════════════════════════
 
 type McpInstallResult = { success: boolean, message: string, configPath?: string }
+
+async function updateManifest(mutator: (manifest: CcgManifest) => void): Promise<void> {
+  const manifest = await readManifest(CCG_MANIFEST_FILE) ?? createEmptyManifest()
+  mutator(manifest)
+  await writeManifest(manifest, CCG_MANIFEST_FILE)
+}
 
 /**
  * Common pipeline for installing an MCP server into ~/.claude.json:
@@ -50,6 +58,9 @@ async function configureMcpInClaude(
 
     // Write config back (preserve all other fields)
     await writeClaudeCodeConfig(mergedConfig)
+    await updateManifest((manifest) => {
+      manifest.mcpServers = [...new Set([...manifest.mcpServers, serverId])].sort()
+    })
 
     return {
       success: true,
@@ -398,6 +409,12 @@ export async function syncMcpToCodex(): Promise<SyncResult> {
     const tmpPath = `${codexConfigPath}.tmp`
     await fs.writeFile(tmpPath, stringifyToml(codexConfig), 'utf-8')
     await fs.rename(tmpPath, codexConfigPath)
+    await updateManifest((manifest) => {
+      const next = new Set(manifest.mcpSyncTargets.codex)
+      for (const id of synced) next.add(id)
+      for (const id of removed) next.delete(id)
+      manifest.mcpSyncTargets.codex = [...next].sort()
+    })
 
     return { success: true, message: formatSyncMessage('Codex', synced, removed), synced, removed }
   }
@@ -435,6 +452,12 @@ export async function syncMcpToGemini(): Promise<SyncResult> {
     }
 
     await fs.writeJSON(geminiSettingsPath, geminiSettings, { spaces: 2 })
+    await updateManifest((manifest) => {
+      const next = new Set(manifest.mcpSyncTargets.gemini)
+      for (const id of synced) next.add(id)
+      for (const id of removed) next.delete(id)
+      manifest.mcpSyncTargets.gemini = [...next].sort()
+    })
 
     return { success: true, message: formatSyncMessage('Gemini', synced, removed), synced, removed }
   }

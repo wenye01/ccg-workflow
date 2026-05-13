@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { injectConfigVariables } from '../installer'
+import { replaceHomePathsInTemplate } from '../installer-template'
 
 // Helper: find package root (mirrors the logic in installer.ts)
 function findPackageRoot(): string {
@@ -125,6 +126,36 @@ describe('mcpProvider = "skip"', () => {
     const result = injectConfigVariables(input, skipConfig)
     expect(result).not.toContain('mcp__ace-tool')
     expect(result).not.toContain('mcp__contextweaver')
+  })
+})
+
+describe('replaceHomePathsInTemplate — CCG private path isolation', () => {
+  it('maps legacy private paths to the isolated CCG directory', () => {
+    const result = replaceHomePathsInTemplate(
+      '~/.claude/.ccg/prompts/codex/reviewer.md',
+      '/home/test/.claude',
+      '/home/test/.ccg',
+    )
+    expect(result).toBe('/home/test/.ccg/prompts/codex/reviewer.md')
+  })
+
+  it('maps legacy binary path to ~/.ccg/bin', () => {
+    const result = replaceHomePathsInTemplate(
+      '~/.claude/bin/codeagent-wrapper --backend codex',
+      '/home/test/.claude',
+      '/home/test/.ccg',
+    )
+    expect(result).toContain('/home/test/.ccg/bin/codeagent-wrapper')
+    expect(result).not.toContain('/home/test/.claude/bin')
+  })
+
+  it('keeps Claude commands under ~/.claude', () => {
+    const result = replaceHomePathsInTemplate(
+      '~/.claude/commands/ccg/plan.md',
+      '/home/test/.claude',
+      '/home/test/.ccg',
+    )
+    expect(result).toBe('/home/test/.claude/commands/ccg/plan.md')
   })
 })
 

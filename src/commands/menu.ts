@@ -12,10 +12,12 @@ import { version } from '../../package.json'
 import { configMcp } from './config-mcp'
 import { i18n } from '../i18n'
 import { uninstallWorkflows } from '../utils/installer'
-import { readCcgConfig, writeCcgConfig } from '../utils/config'
+import { getConfigPath, readCcgConfig, writeCcgConfig } from '../utils/config'
 import { init } from './init'
 import { update } from './update'
 import { isWindows } from '../utils/platform'
+import { createEmptyManifest, readManifest, writeManifest } from '../utils/manifest'
+import { CCG_MANIFEST_FILE, CLAUDE_DIR } from '../utils/paths'
 
 const execAsync = promisify(exec)
 
@@ -302,7 +304,7 @@ function showHelp(): void {
  */
 function readCcgConfigSync(): any {
   try {
-    const configPath = join(homedir(), '.claude', '.ccg', 'config.toml')
+    const configPath = getConfigPath()
     if (fs.pathExistsSync(configPath)) {
       return parseTOML(fs.readFileSync(configPath, 'utf-8'))
     }
@@ -414,8 +416,8 @@ async function configApi(): Promise<void> {
   if (!settings.permissions.allow)
     settings.permissions.allow = []
   const wrapperPerms = [
-    'Bash(~/.claude/bin/codeagent-wrapper --backend gemini*)',
-    'Bash(~/.claude/bin/codeagent-wrapper --backend codex*)',
+    'Bash(~/.ccg/bin/codeagent-wrapper --backend gemini*)',
+    'Bash(~/.ccg/bin/codeagent-wrapper --backend codex*)',
   ]
   for (const perm of wrapperPerms) {
     if (!settings.permissions.allow.includes(perm))
@@ -618,6 +620,9 @@ async function configOutputStyle(): Promise<void> {
 
     if (await fs.pathExists(templatePath)) {
       await fs.copy(templatePath, destPath)
+      const manifest = await readManifest(CCG_MANIFEST_FILE) ?? createEmptyManifest()
+      manifest.outputStyles = [...new Set([...manifest.outputStyles, `${style}.md`])].sort()
+      await writeManifest(manifest, CCG_MANIFEST_FILE)
       console.log(ansis.green(`  ✓ ${i18n.t('menu:style.installed', { style })}`))
     }
   }
@@ -787,7 +792,7 @@ async function uninstall(): Promise<void> {
   console.log(ansis.yellow(`  ${i18n.t('menu:uninstall.uninstalling')}`))
 
   // Uninstall workflows
-  const installDir = join(homedir(), '.claude')
+  const installDir = CLAUDE_DIR
   const result = await uninstallWorkflows(installDir)
 
   if (result.success) {
