@@ -61,8 +61,11 @@ export function mergeConfigs(globalConfig: CcgConfig, localConfig: Partial<CcgCo
 
 export async function readEffectiveConfig(paths: ResolvedPaths): Promise<CcgConfig | null> {
   const globalConfig = await readCcgConfig()
-  if (!globalConfig)
+  if (!globalConfig) {
+    if (paths.scope === 'local')
+      return readCcgConfig(paths.ccgConfigFile)
     return null
+  }
 
   if (paths.scope === 'global')
     return globalConfig

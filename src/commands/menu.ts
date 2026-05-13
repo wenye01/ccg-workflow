@@ -17,7 +17,7 @@ import { init } from './init'
 import { update } from './update'
 import { isWindows } from '../utils/platform'
 import { createEmptyManifest, readManifest, writeManifest } from '../utils/manifest'
-import { CCG_MANIFEST_FILE, CLAUDE_DIR } from '../utils/paths'
+import { CCG_MANIFEST_FILE, CLAUDE_DIR, resolvePaths } from '../utils/paths'
 
 const execAsync = promisify(exec)
 
@@ -176,6 +176,7 @@ export async function showMainMenu(): Promise<void> {
 
         groupSep('CCG'),
         item('H', i18n.t('menu:options.help'), isZh ? '查看全部斜杠命令' : 'View all slash commands'),
+        item('L', isZh ? '卸载项目配置' : 'Uninstall local config', isZh ? '移除当前项目 .claude/.ccg 中的 CCG' : 'Remove project .claude/.ccg CCG files'),
         item('-', i18n.t('menu:options.uninstall'), isZh ? '移除 CCG 配置' : 'Remove CCG config'),
 
         new inquirer.Separator(ansis.gray('─'.repeat(42))),
@@ -210,6 +211,9 @@ export async function showMainMenu(): Promise<void> {
         break
       case '-':
         await uninstall()
+        break
+      case 'L':
+        await uninstallLocal()
         break
       case 'H':
         showHelp()
@@ -836,6 +840,84 @@ async function uninstall(): Promise<void> {
       console.log(ansis.cyan.bold('    npm uninstall -g ccg-workflow'))
       console.log()
       console.log(ansis.gray(`  (${i18n.t('menu:uninstall.afterDone')})`))
+    }
+  }
+  else {
+    console.log(ansis.red(`  ${i18n.t('menu:uninstall.failed')}`))
+    for (const error of result.errors) {
+      console.log(ansis.red(`    ${error}`))
+    }
+  }
+
+  console.log()
+}
+
+async function uninstallLocal(): Promise<void> {
+  const paths = resolvePaths('local')
+  console.log()
+  console.log(ansis.cyan.bold('  Project CCG uninstall'))
+  console.log(ansis.gray(`  ${paths.projectRoot}`))
+  console.log()
+
+  if (!(await fs.pathExists(paths.ccgManifestFile))) {
+    console.log(ansis.yellow('  No project-level CCG manifest found in the current directory.'))
+    console.log(ansis.gray(`  Expected: ${paths.ccgManifestFile}`))
+    return
+  }
+
+  const { confirm } = await inquirer.prompt([{
+    type: 'confirm',
+    name: 'confirm',
+    message: 'Remove project-level CCG files from .claude/ and .ccg/?',
+    default: false,
+  }])
+
+  if (!confirm) {
+    console.log(ansis.gray(`  ${i18n.t('menu:uninstall.cancelled')}`))
+    return
+  }
+
+  console.log()
+  console.log(ansis.yellow(`  ${i18n.t('menu:uninstall.uninstalling')}`))
+
+  const result = await uninstallWorkflows(paths.claudeDir, {
+    preserveBinary: true,
+    ccgPrivateDir: paths.ccgPrivateDir,
+  })
+
+  try {
+    await fs.remove(paths.ccgPrivateDir)
+    result.removedPrompts.push('PROJECT_CCG_CONFIGS')
+  }
+  catch (error) {
+    result.success = false
+    result.errors.push(`Failed to remove project .ccg directory: ${error}`)
+  }
+
+  if (result.success) {
+    console.log(ansis.green(`  ✅ ${i18n.t('menu:uninstall.success')}`))
+    console.log(ansis.gray(`    ${paths.ccgPrivateDir}`))
+
+    if (result.removedCommands.length > 0) {
+      console.log()
+      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedCommands')}`))
+      for (const cmd of result.removedCommands) {
+        console.log(`    ${ansis.gray('•')} /ccg:${cmd}`)
+      }
+    }
+
+    if (result.removedAgents.length > 0) {
+      console.log()
+      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedAgents')}`))
+      for (const agent of result.removedAgents) {
+        console.log(`    ${ansis.gray('•')} ${agent}`)
+      }
+    }
+
+    if (result.removedSkills.length > 0) {
+      console.log()
+      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedSkills')}`))
+      console.log(`    ${ansis.gray('•')} ${result.removedSkills.length} files`)
     }
   }
   else {

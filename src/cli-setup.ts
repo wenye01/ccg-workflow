@@ -6,6 +6,7 @@ import { configMcp } from './commands/config-mcp'
 import { diagnoseMcp, fixMcp } from './commands/diagnose-mcp'
 import { init } from './commands/init'
 import { showMainMenu } from './commands/menu'
+import { update } from './commands/update'
 import { i18n, initI18n } from './i18n'
 import { readCcgConfig } from './utils/config'
 
@@ -20,6 +21,7 @@ function customizeHelp(sections: any[]): any[] {
     body: [
       `  ${ansis.cyan('ccg')}              ${i18n.t('cli:help.commandDescriptions.showMenu')}`,
       `  ${ansis.cyan('ccg init')} | ${ansis.cyan('i')}     ${i18n.t('cli:help.commandDescriptions.initConfig')}`,
+      `  ${ansis.cyan('ccg update')}        Update CCG workflows`,
       `  ${ansis.cyan('ccg config mcp')}   ${i18n.t('cli:help.commandDescriptions.configMcp')}`,
       `  ${ansis.cyan('ccg diagnose-mcp')} ${i18n.t('cli:help.commandDescriptions.diagnoseMcp')}`,
       `  ${ansis.cyan('ccg fix-mcp')}      ${i18n.t('cli:help.commandDescriptions.fixMcp')}`,
@@ -110,6 +112,13 @@ export async function setupCommands(cli: CAC): Promise<void> {
         await initI18n(options.lang)
       }
       await init(options)
+    })
+
+  // Update command
+  cli
+    .command('update', 'Update CCG workflows')
+    .action(async () => {
+      await update()
     })
 
   // Diagnose MCP command

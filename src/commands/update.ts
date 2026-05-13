@@ -9,19 +9,30 @@ import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { checkForUpdates, compareVersions } from '../utils/version'
 import { showBinaryDownloadWarning, verifyBinary } from '../utils/installer'
-import { readCcgConfig, writeCcgConfig } from '../utils/config'
+import { readEffectiveConfig } from '../utils/config'
 import { migrateToV2_2_0, needsMigration } from '../utils/migration'
 import { i18n } from '../i18n'
-import { CCG_BIN_DIR, CCG_PROMPTS_DIR, CLAUDE_DIR } from '../utils/paths'
+import { CCG_BIN_DIR, CCG_PROMPTS_DIR, resolvePaths } from '../utils/paths'
 
 const execAsync = promisify(exec)
+
+function shellQuote(value: string): string {
+  return JSON.stringify(value)
+}
 
 /**
  * Main update command - checks for updates and installs if available
  */
 export async function update(): Promise<void> {
+  const localPaths = resolvePaths('local')
+  const isLocalUpdate = await fs.pathExists(localPaths.ccgManifestFile)
+  const paths = isLocalUpdate ? localPaths : resolvePaths('global')
+
   console.log()
   console.log(ansis.cyan.bold(`🔄 ${i18n.t('update:checking')}`))
+  if (isLocalUpdate) {
+    console.log(ansis.gray(`Project install detected → ${paths.projectRoot}`))
+  }
   console.log()
 
   const spinner = ora(i18n.t('update:checkingLatest')).start()
@@ -30,7 +41,7 @@ export async function update(): Promise<void> {
     const { hasUpdate, currentVersion, latestVersion } = await checkForUpdates()
 
     // Check if local workflow version differs from running version
-    const config = await readCcgConfig()
+    const config = await readEffectiveConfig(paths)
     const localVersion = config?.general?.version || '0.0.0'
     const needsWorkflowUpdate = compareVersions(currentVersion, localVersion) > 0
 
@@ -80,7 +91,7 @@ export async function update(): Promise<void> {
 
     // Pass localVersion as fromVersion for accurate display
     const fromVersion = needsWorkflowUpdate ? localVersion : currentVersion
-    await performUpdate(fromVersion, latestVersion || currentVersion, hasUpdate)
+    await performUpdate(fromVersion, latestVersion || currentVersion, hasUpdate, isLocalUpdate)
   }
   catch (error) {
     spinner.stop()
@@ -189,13 +200,16 @@ async function checkIfGlobalInstall(): Promise<boolean> {
 /**
  * Perform the actual update process
  */
-async function performUpdate(fromVersion: string, toVersion: string, isNewVersion: boolean): Promise<void> {
+async function performUpdate(fromVersion: string, toVersion: string, isNewVersion: boolean, isLocalUpdate = false): Promise<void> {
   console.log()
   console.log(ansis.yellow.bold(`⚙️  ${i18n.t('update:starting')}`))
   console.log()
 
-  // Check if installed globally via npm
-  const isGlobalInstall = await checkIfGlobalInstall()
+  const paths = resolvePaths(isLocalUpdate ? 'local' : 'global')
+
+  // Check if installed globally via npm. Local project updates still reuse the
+  // globally shared CLI/binary, but must not prompt for global package changes.
+  const isGlobalInstall = !isLocalUpdate && await checkIfGlobalInstall()
 
   // If globally installed and only workflow needs update (package is already latest)
   if (isGlobalInstall && !isNewVersion) {
@@ -270,7 +284,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   }
 
   // Step 2: Auto-migrate from old directory structure (if needed)
-  if (await needsMigration()) {
+  if (!isLocalUpdate && await needsMigration()) {
     spinner = ora(i18n.t('update:migrating')).start()
     const migrationResult = await migrateToV2_2_0()
 
@@ -304,17 +318,25 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   // the user was left with nothing. New approach backs up first, installs new,
   // verifies, then cleans up backups. On failure, restores from backup.
 
-  const installDir = CLAUDE_DIR
+  const installDir = paths.claudeDir
   const BACKUP_SUFFIX = '.ccg-update-bak'
 
   // Directories to back up before installing new version
-  const backupTargets = [
-    join(installDir, 'commands', 'ccg'),
-    join(installDir, 'agents', 'ccg'),
-    join(installDir, 'skills', 'ccg'),
-    CCG_PROMPTS_DIR,
-    CCG_BIN_DIR,
-  ]
+  const backupTargets = isLocalUpdate
+    ? [
+        paths.claudeCommandsDir,
+        paths.claudeAgentsDir,
+        paths.claudeSkillsDir,
+        paths.claudeRulesDir,
+        paths.ccgPromptsDir,
+      ]
+    : [
+        join(installDir, 'commands', 'ccg'),
+        join(installDir, 'agents', 'ccg'),
+        join(installDir, 'skills', 'ccg'),
+        CCG_PROMPTS_DIR,
+        CCG_BIN_DIR,
+      ]
 
   // Step 3: Back up existing files (move to *.ccg-update-bak)
   spinner = ora(i18n.t('update:removingOld')).start()
@@ -355,7 +377,11 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
 
   let installSuccess = false
   try {
-    await execAsync(`npx --yes ccg-workflow@latest init --force --skip-mcp --skip-prompt`, {
+    const initCommand = isLocalUpdate
+      ? `npx --yes ccg-workflow@latest init --local --project-root ${shellQuote(paths.projectRoot)} --force --skip-mcp --skip-prompt`
+      : `npx --yes ccg-workflow@latest init --force --skip-mcp --skip-prompt`
+
+    await execAsync(initCommand, {
       timeout: 300000, // 5min — binary download from GitHub Release may be slow (especially in China)
       env: {
         ...process.env,
@@ -373,7 +399,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
       spinner.succeed(i18n.t('update:installDone'))
 
       // Read updated config to display installed commands
-      const config = await readCcgConfig()
+      const config = await readEffectiveConfig(paths)
       if (config?.workflows?.installed) {
         console.log()
         console.log(ansis.cyan(i18n.t('update:installed', { count: config.workflows.installed.length })))
@@ -404,10 +430,10 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     }
 
     // Verify binary exists, is functional, AND version matches
-    if (!(await verifyBinary(installDir))) {
+    if (!isLocalUpdate && !(await verifyBinary(installDir))) {
       showBinaryDownloadWarning(CCG_BIN_DIR)
     }
-    else {
+    else if (!isLocalUpdate) {
       // Binary exists and runs, but check version
       const { verifyBinaryVersion } = await import('../utils/installer')
       const versionOk = await verifyBinaryVersion(installDir)
