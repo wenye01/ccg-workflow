@@ -4,7 +4,6 @@ export interface CliOptions {
   lang?: SupportedLang
   force?: boolean
   skipPrompt?: boolean
-  skipMcp?: boolean
   frontend?: string
   backend?: string
   mode?: CollaborationMode

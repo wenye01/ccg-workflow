@@ -84,33 +84,4 @@ describe('manifest', () => {
     expect(result.ok).toBe(false)
     expect(result.missing).toContain('commands/workflow.md')
   })
-
-  it('cleans Codex MCP sync entries from TOML when recorded', async () => {
-    const manifestPath = join(tmpRoot, '.ccg', 'manifest.json')
-    const codexConfigFile = join(tmpRoot, '.codex', 'config.toml')
-    await fs.ensureDir(join(tmpRoot, '.codex'))
-    await fs.writeFile(codexConfigFile, [
-      '[mcp_servers.context7]',
-      'command = "npx"',
-      'args = ["-y", "@upstash/context7-mcp@latest"]',
-      '',
-      '[mcp_servers.user_server]',
-      'command = "node"',
-    ].join('\n'))
-
-    const manifest = createEmptyManifest('1.2.3')
-    manifest.mcpSyncTargets.codex = ['context7']
-    await writeManifest(manifest, manifestPath)
-
-    const result = await uninstallWithManifest({
-      manifestFile: manifestPath,
-      codexConfigFile,
-    })
-
-    expect(result.errors).toEqual([])
-    expect(result.removedCodexMcpServers).toEqual(['context7'])
-    const content = await fs.readFile(codexConfigFile, 'utf-8')
-    expect(content).not.toContain('context7')
-    expect(content).toContain('user_server')
-  })
 })

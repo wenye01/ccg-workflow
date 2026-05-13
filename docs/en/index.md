@@ -35,7 +35,4 @@ features:
   - icon: ⚡
     title: One line, ready to go
     details: npx ccg-workflow — 28 commands, works on macOS, Linux, and Windows.
-  - icon: 🧩
-    title: MCP ecosystem built in
-    details: ace-tool, fast-context, Context7 and more — one-click setup, auto-synced to Codex and Gemini.
 ---

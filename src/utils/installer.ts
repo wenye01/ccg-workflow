@@ -25,26 +25,6 @@ export type { WorkflowPreset } from './installer-data'
 export { injectConfigVariables } from './installer-template'
 
 export {
-  installAceTool,
-  installAceToolRs,
-  installContextWeaver,
-  installFastContext,
-  installMcpServer,
-  syncMcpToCodex,
-  syncMcpToGemini,
-  uninstallAceTool,
-  uninstallContextWeaver,
-  uninstallFastContext,
-  uninstallMcpServer,
-} from './installer-mcp'
-export type { ContextWeaverConfig } from './installer-mcp'
-
-export {
-  removeFastContextPrompt,
-  writeFastContextPrompt,
-} from './installer-prompt'
-
-export {
   collectInvocableSkills,
   collectSkills,
   parseFrontmatter,
@@ -75,7 +55,6 @@ interface InstallConfig {
     geminiModel?: string
   }
   liteMode: boolean
-  mcpProvider: string
   skipImpeccable?: boolean
 }
 
@@ -99,7 +78,6 @@ interface InstallWorkflowsConfig {
     geminiModel?: string
   }
   liteMode?: boolean
-  mcpProvider?: string
   skipImpeccable?: boolean
 }
 
@@ -762,7 +740,6 @@ export async function installWorkflows(
         review: { models: ['codex', 'gemini'] },
       },
       liteMode: installConfig?.liteMode || false,
-      mcpProvider: installConfig?.mcpProvider || 'ace-tool',
       skipImpeccable: installConfig?.skipImpeccable || false,
     },
     templateDir: join(PACKAGE_ROOT, 'templates'),
@@ -815,7 +792,6 @@ export async function installWorkflows(
     'DISABLE_ERROR_REPORTING',
     'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
     'CLAUDE_CODE_ATTRIBUTION_HEADER',
-    'MCP_TIMEOUT',
   ]
   manifest.settingsEntries.permissions = [
     'Bash(*codeagent-wrapper*)',
@@ -966,7 +942,7 @@ export async function uninstallWorkflows(installDir: string, options?: { preserv
   // Remove CCG rules files
   if (await fs.pathExists(rulesDir)) {
     try {
-      for (const ruleFile of ['ccg-skills.md', 'ccg-grok-search.md', 'ccg-skill-routing.md']) {
+      for (const ruleFile of ['ccg-skills.md', 'ccg-skill-routing.md']) {
         const rulePath = join(rulesDir, ruleFile)
         if (await fs.pathExists(rulePath)) {
           await fs.remove(rulePath)

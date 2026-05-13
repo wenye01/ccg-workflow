@@ -1,18 +1,14 @@
 import fs from 'fs-extra'
 import { basename, dirname, join, relative } from 'pathe'
-import { parse, stringify } from 'smol-toml'
 import { version as packageVersion } from '../../package.json'
 import {
   CCG_MANIFEST_FILE,
   CLAUDE_AGENTS_DIR,
   CLAUDE_COMMANDS_DIR,
-  CLAUDE_JSON_FILE,
   CLAUDE_OUTPUT_STYLES_DIR,
   CLAUDE_RULES_DIR,
   CLAUDE_SETTINGS_FILE,
   CLAUDE_SKILLS_DIR,
-  CODEX_CONFIG_FILE,
-  GEMINI_SETTINGS_FILE,
 } from './paths'
 
 export interface CcgManifest {
@@ -29,11 +25,6 @@ export interface CcgManifest {
     envVars: string[]
     permissions: string[]
   }
-  mcpServers: string[]
-  mcpSyncTargets: {
-    codex: string[]
-    gemini: string[]
-  }
   shellRc?: {
     file: string
     line: string
@@ -48,9 +39,6 @@ export interface ManifestPaths {
   claudeRulesDir?: string
   claudeOutputStylesDir?: string
   claudeSettingsFile?: string
-  claudeJsonFile?: string
-  codexConfigFile?: string
-  geminiSettingsFile?: string
 }
 
 export interface ManifestUninstallResult {
@@ -59,9 +47,6 @@ export interface ManifestUninstallResult {
   removedSkills: string[]
   removedRules: string[]
   removedOutputStyles: string[]
-  removedMcpServers: string[]
-  removedCodexMcpServers: string[]
-  removedGeminiMcpServers: string[]
   removedSettingsEntries: string[]
   removedShellRcLine: boolean
   errors: string[]
@@ -76,9 +61,6 @@ function paths(overrides: ManifestPaths = {}) {
     claudeRulesDir: overrides.claudeRulesDir ?? CLAUDE_RULES_DIR,
     claudeOutputStylesDir: overrides.claudeOutputStylesDir ?? CLAUDE_OUTPUT_STYLES_DIR,
     claudeSettingsFile: overrides.claudeSettingsFile ?? CLAUDE_SETTINGS_FILE,
-    claudeJsonFile: overrides.claudeJsonFile ?? CLAUDE_JSON_FILE,
-    codexConfigFile: overrides.codexConfigFile ?? CODEX_CONFIG_FILE,
-    geminiSettingsFile: overrides.geminiSettingsFile ?? GEMINI_SETTINGS_FILE,
   }
 }
 
@@ -97,11 +79,6 @@ export function createEmptyManifest(ccgVersion = packageVersion): CcgManifest {
     settingsEntries: {
       envVars: [],
       permissions: [],
-    },
-    mcpServers: [],
-    mcpSyncTargets: {
-      codex: [],
-      gemini: [],
     },
   }
 }
@@ -167,16 +144,6 @@ async function removeJsonEntries(file: string, updater: (config: Record<string, 
   return removed
 }
 
-async function removeTomlEntries(file: string, updater: (config: Record<string, any>) => string[]): Promise<string[]> {
-  if (!(await fs.pathExists(file))) return []
-  const config = parse(await fs.readFile(file, 'utf-8')) as Record<string, any>
-  const removed = updater(config)
-  if (removed.length > 0) {
-    await fs.writeFile(file, stringify(config), 'utf-8')
-  }
-  return removed
-}
-
 export async function uninstallWithManifest(overrides: ManifestPaths = {}): Promise<ManifestUninstallResult> {
   const p = paths(overrides)
   const result: ManifestUninstallResult = {
@@ -185,9 +152,6 @@ export async function uninstallWithManifest(overrides: ManifestPaths = {}): Prom
     removedSkills: [],
     removedRules: [],
     removedOutputStyles: [],
-    removedMcpServers: [],
-    removedCodexMcpServers: [],
-    removedGeminiMcpServers: [],
     removedSettingsEntries: [],
     removedShellRcLine: false,
     errors: [],
@@ -228,61 +192,6 @@ export async function uninstallWithManifest(overrides: ManifestPaths = {}): Prom
   }
   catch (error) {
     result.errors.push(`Failed to clean settings.json: ${error}`)
-  }
-
-  if (manifest.mcpServers.length > 0) {
-    try {
-      result.removedMcpServers = await removeJsonEntries(p.claudeJsonFile, (config) => {
-        const removed: string[] = []
-        for (const server of manifest.mcpServers) {
-          if (config.mcpServers?.[server]) {
-            delete config.mcpServers[server]
-            removed.push(server)
-          }
-        }
-        if (config.mcpServers && Object.keys(config.mcpServers).length === 0) delete config.mcpServers
-        return removed
-      })
-    }
-    catch (error) {
-      result.errors.push(`Failed to clean .claude.json: ${error}`)
-    }
-  }
-
-  if (manifest.mcpSyncTargets.codex.length > 0) {
-    try {
-      result.removedCodexMcpServers = await removeTomlEntries(p.codexConfigFile, (config) => {
-        const removed: string[] = []
-        for (const server of manifest.mcpSyncTargets.codex) {
-          if (config.mcp_servers?.[server]) {
-            delete config.mcp_servers[server]
-            removed.push(server)
-          }
-        }
-        return removed
-      })
-    }
-    catch (error) {
-      result.errors.push(`Failed to clean Codex MCP config: ${error}`)
-    }
-  }
-
-  if (manifest.mcpSyncTargets.gemini.length > 0) {
-    try {
-      result.removedGeminiMcpServers = await removeJsonEntries(p.geminiSettingsFile, (config) => {
-        const removed: string[] = []
-        for (const server of manifest.mcpSyncTargets.gemini) {
-          if (config.mcpServers?.[server]) {
-            delete config.mcpServers[server]
-            removed.push(server)
-          }
-        }
-        return removed
-      })
-    }
-    catch (error) {
-      result.errors.push(`Failed to clean Gemini MCP config: ${error}`)
-    }
   }
 
   if (manifest.shellRc) {

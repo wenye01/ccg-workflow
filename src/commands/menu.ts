@@ -9,7 +9,6 @@ import { dirname, join } from 'pathe'
 import fs from 'fs-extra'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
-import { configMcp } from './config-mcp'
 import { i18n } from '../i18n'
 import { uninstallWorkflows } from '../utils/installer'
 import { getConfigPath, readCcgConfig, writeCcgConfig } from '../utils/config'
@@ -134,7 +133,6 @@ export async function showMainMenu(): Promise<void> {
     const config = await readCcgConfig()
     const cmdCount = config?.workflows?.installed?.length || 0
     const lang = config?.general?.language || 'zh-CN'
-    const mcpProvider = config?.mcp?.provider || '—'
 
     // Build status parts
     const statusParts = [
@@ -142,9 +140,6 @@ export async function showMainMenu(): Promise<void> {
       ansis.white(`${cmdCount} commands`),
       ansis.yellow(lang),
     ]
-    if (mcpProvider && mcpProvider !== '—' && mcpProvider !== 'skip') {
-      statusParts.push(ansis.magenta(mcpProvider))
-    }
 
     drawHeader(statusParts)
 
@@ -165,10 +160,9 @@ export async function showMainMenu(): Promise<void> {
         groupSep(isZh ? 'Claude Code' : 'Claude Code'),
         item('1', i18n.t('menu:options.init'), isZh ? '安装 CCG 工作流' : 'Install CCG workflows'),
         item('2', i18n.t('menu:options.update'), isZh ? '更新到最新版本' : 'Update to latest version'),
-        item('3', i18n.t('menu:options.configMcp'), isZh ? '代码检索 MCP 工具' : 'Code retrieval MCP tool'),
-        item('4', i18n.t('menu:options.configApi'), isZh ? '自定义 API 端点' : 'Custom API endpoint'),
-        item('5', i18n.t('menu:options.configStyle'), isZh ? '选择输出人格' : 'Choose output personality'),
-        item('6', i18n.t('menu:options.configModel'), isZh ? '前端/后端模型切换' : 'Switch frontend/backend models'),
+        item('3', i18n.t('menu:options.configApi'), isZh ? '自定义 API 端点' : 'Custom API endpoint'),
+        item('4', i18n.t('menu:options.configStyle'), isZh ? '选择输出人格' : 'Choose output personality'),
+        item('5', i18n.t('menu:options.configModel'), isZh ? '前端/后端模型切换' : 'Switch frontend/backend models'),
 
         groupSep(isZh ? '其他工具' : 'Tools'),
         item('T', i18n.t('menu:options.tools'), 'ccusage, CCometixLine'),
@@ -192,15 +186,12 @@ export async function showMainMenu(): Promise<void> {
         await update()
         break
       case '3':
-        await configMcp()
-        break
-      case '4':
         await configApi()
         break
-      case '5':
+      case '4':
         await configOutputStyle()
         break
-      case '6':
+      case '5':
         await configModelRouting()
         break
       case 'T':
@@ -412,7 +403,6 @@ async function configApi(): Promise<void> {
   settings.env.DISABLE_ERROR_REPORTING = '1'
   settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
   settings.env.CLAUDE_CODE_ATTRIBUTION_HEADER = '0'
-  settings.env.MCP_TIMEOUT = '60000'
 
   // codeagent-wrapper permission allowlist
   if (!settings.permissions)
@@ -563,7 +553,7 @@ async function configModelRouting(): Promise<void> {
   const spinner = ora(i18n.t('init:model.reinstalling')).start()
   try {
     const { execSync } = await import('node:child_process')
-    execSync('npx --yes ccg-workflow init --force --skip-prompt --skip-mcp', {
+    execSync('npx --yes ccg-workflow init --force --skip-prompt', {
       timeout: 300000,
       stdio: 'pipe',
       env: { ...process.env, CCG_UPDATE_MODE: 'true' },

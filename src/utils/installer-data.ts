@@ -58,7 +58,7 @@ const WORKFLOW_CONFIGS: WorkflowConfig[] = [
   cmd('optimize', 7, 'development', '性能优化', 'Performance Optimization', '多模型性能优化', 'Multi-model performance optimization'),
   cmd('test', 8, 'development', '测试生成', 'Test Generation', '智能路由测试生成', 'Smart routing test generation'),
   cmd('review', 9, 'development', '代码审查', 'Code Review', '双模型代码审查，无参数时自动审查 git diff', 'Dual-model code review, auto-review git diff when no args'),
-  cmd('enhance', 9.5, 'development', 'Prompt 增强', 'Prompt Enhancement', 'ace-tool Prompt 增强工具', 'ace-tool prompt enhancement'),
+  cmd('enhance', 9.5, 'development', 'Prompt 增强', 'Prompt Enhancement', 'Prompt 增强工具', 'Prompt enhancement'),
 
   // ── Init ─────────────────────────────────────────────
   cmd('init-project', 10, 'init', '项目初始化', 'Project Init', '初始化项目 AI 上下文，生成 CLAUDE.md', 'Initialize project AI context, generate CLAUDE.md', 'init'),
@@ -70,7 +70,7 @@ const WORKFLOW_CONFIGS: WorkflowConfig[] = [
   cmd('worktree', 23, 'git', 'Git Worktree', 'Git Worktree', '管理 Git worktree', 'Manage Git worktree'),
 
   // ── Spec (OpenSpec / OPSX) ───────────────────────────
-  cmd('spec-init', 30, 'spec', 'OpenSpec 初始化', 'OpenSpec Init', '初始化 OpenSpec 环境 + 验证多模型 MCP 工具', 'Initialize OpenSpec environment with multi-model MCP validation'),
+  cmd('spec-init', 30, 'spec', 'OpenSpec 初始化', 'OpenSpec Init', '初始化 OpenSpec 环境', 'Initialize OpenSpec environment'),
   cmd('spec-research', 31, 'spec', '需求研究', 'Spec Research', '需求 → 约束集（并行探索 + OpenSpec 提案）', 'Transform requirements into constraint sets via parallel exploration'),
   cmd('spec-plan', 32, 'spec', '零决策规划', 'Spec Plan', '多模型分析 → 消除歧义 → 零决策可执行计划', 'Refine proposals into zero-decision executable plans'),
   cmd('spec-impl', 33, 'spec', '规范驱动实现', 'Spec Implementation', '按规范执行 + 多模型协作 + 归档', 'Execute changes via multi-model collaboration with spec compliance'),

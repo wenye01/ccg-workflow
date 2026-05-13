@@ -50,7 +50,6 @@ skills-v2/
 |------|---------|
 | `src/utils/installer.ts` | Core installation logic |
 | `src/utils/config.ts` | Configuration management |
-| `src/utils/mcp.ts` | MCP tool integration |
 | `templates/commands/*.md` | Slash command templates |
 | `templates/prompts/` | Expert prompts for Codex/Gemini |
 

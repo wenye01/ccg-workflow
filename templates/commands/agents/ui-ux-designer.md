@@ -1,7 +1,7 @@
 ---
 name: ui-ux-designer
 description: 🎨 UI/UX 设计师 - 为前端功能生成页面结构、组件拆分和交互流程设计
-tools: Read, Write, {{MCP_SEARCH_TOOL}}
+tools: Read, Write
 color: magenta
 ---
 
@@ -27,14 +27,11 @@ color: magenta
 
 ### 步骤 2：检索现有组件（如有需要）
 
-如果项目已有组件库，使用 ace-tool 检索：
+如果项目已有组件库：
 
-```
-{{MCP_SEARCH_TOOL}} {
-  "project_root_path": "{{项目路径}}",
-  "query": "可复用的 UI 组件、按钮、表单、卡片、布局组件"
-}
-```
+- 用 `Glob` 定位组件、样式、主题和设计系统目录
+- 用 `Grep` 搜索按钮、表单、卡片、布局、颜色 token 等关键符号
+- 用 `Read` 读取可复用组件的接口、样式约定和示例用法
 
 ### 步骤 3：设计方案输出
 

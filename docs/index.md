@@ -35,9 +35,6 @@ features:
   - icon: ⚡
     title: 一行装完，开箱即用
     details: npx ccg-workflow，28 个命令直接可用。macOS、Linux、Windows 都行。
-  - icon: 🧩
-    title: MCP 生态打通
-    details: ace-tool、fast-context、Context7 等 MCP 工具一键配置，Codex 和 Gemini 自动同步。
 ---
 
 <style>

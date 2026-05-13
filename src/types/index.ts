@@ -46,10 +46,6 @@ export interface CcgConfig {
     prompts: string
     backup: string
   }
-  mcp: {
-    provider: string
-    setup_url: string
-  }
   performance?: {
     liteMode?: boolean // 轻量模式：禁用 Web UI，更快响应
     skipImpeccable?: boolean // 跳过 Impeccable 前端设计命令安装
@@ -73,7 +69,6 @@ export interface WorkflowConfig {
 export interface InitOptions {
   lang?: SupportedLang
   skipPrompt?: boolean
-  skipMcp?: boolean // 更新时跳过 MCP 配置
   force?: boolean
   // 非交互模式参数
   frontend?: string
@@ -97,18 +92,6 @@ export interface InstallResult {
   configPath: string
   binPath?: string
   binInstalled?: boolean
-}
-
-// ace-tool 配置
-export interface AceToolConfig {
-  baseUrl: string
-  token: string
-}
-
-// fast-context (Windsurf Fast Context) 配置
-export interface FastContextConfig {
-  apiKey?: string // WINDSURF_API_KEY (本地装 Windsurf 登录后可自动提取)
-  includeSnippets?: boolean // FC_INCLUDE_SNIPPETS — true 返回完整代码片段
 }
 
 // Re-export CLI types

@@ -195,7 +195,6 @@ describe('template variable completeness', () => {
           review: { models: ['codex', 'gemini'] },
         },
         liteMode: false,
-        mcpProvider: 'ace-tool',
       })
 
       // Find any remaining {{ }} template variables
@@ -210,38 +209,7 @@ describe('template variable completeness', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// D. installWorkflows E2E — contextweaver provider
-// ─────────────────────────────────────────────────────────────
-describe('installWorkflows E2E — mcpProvider="contextweaver"', () => {
-  const tmpDir = join(tmpdir(), `ccg-test-cw-${Date.now()}`)
-
-  afterAll(async () => {
-    await fs.remove(tmpDir)
-  })
-
-  it('installs all workflows without errors', async () => {
-    const result = await installWorkflows(getAllCommandIds(), tmpDir, true, {
-      mcpProvider: 'contextweaver',
-    })
-    expect(result.success).toBe(true)
-    expect(result.errors).toEqual([])
-  }, 30_000)
-
-  it('generated command files contain contextweaver references', async () => {
-    const planContent = readFileSync(join(tmpDir, 'commands', 'ccg', 'plan.md'), 'utf-8')
-    expect(planContent).toContain('mcp__contextweaver__codebase-retrieval')
-    expect(planContent).not.toContain('{{MCP_SEARCH_TOOL}}')
-    expect(planContent).not.toContain('mcp__ace-tool')
-  })
-
-  it('generated agent planner uses contextweaver in tools', async () => {
-    const content = readFileSync(join(tmpDir, 'agents', 'ccg', 'planner.md'), 'utf-8')
-    expect(content).toContain('mcp__contextweaver__codebase-retrieval')
-  })
-})
-
-// ─────────────────────────────────────────────────────────────
-// E. uninstallWorkflows E2E
+// D. uninstallWorkflows E2E
 // ─────────────────────────────────────────────────────────────
 describe('uninstallWorkflows E2E', () => {
   const tmpDir = join(tmpdir(), `ccg-test-uninstall-${Date.now()}`)
@@ -252,9 +220,7 @@ describe('uninstallWorkflows E2E', () => {
 
   it('installs then uninstalls cleanly', async () => {
     // First install
-    const installResult = await installWorkflows(getAllCommandIds(), tmpDir, true, {
-      mcpProvider: 'ace-tool',
-    })
+    const installResult = await installWorkflows(getAllCommandIds(), tmpDir, true)
     expect(installResult.success).toBe(true)
 
     // Verify files exist
@@ -279,7 +245,7 @@ describe('uninstallWorkflows E2E', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// F. Binary installation
+// E. Binary installation
 // ─────────────────────────────────────────────────────────────
 describe('installWorkflows — binary installation', () => {
   const tmpDir = join(tmpdir(), `ccg-test-bin-${Date.now()}`)
@@ -289,9 +255,7 @@ describe('installWorkflows — binary installation', () => {
   })
 
   it('installs codeagent-wrapper binary for current platform', async () => {
-    const result = await installWorkflows(['workflow'], tmpDir, true, {
-      mcpProvider: 'skip',
-    })
+    const result = await installWorkflows(['workflow'], tmpDir, true)
 
     expect(result.binInstalled).toBe(true)
     expect(result.binPath).toBeTruthy()
@@ -302,7 +266,7 @@ describe('installWorkflows — binary installation', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// G. Prompts installation
+// F. Prompts installation
 // ─────────────────────────────────────────────────────────────
 describe('installWorkflows — prompts installation', () => {
   const tmpDir = join(tmpdir(), `ccg-test-prompts-${Date.now()}`)
@@ -312,9 +276,7 @@ describe('installWorkflows — prompts installation', () => {
   })
 
   it('installs codex, gemini, and claude prompts', async () => {
-    const result = await installWorkflows(getAllCommandIds(), tmpDir, true, {
-      mcpProvider: 'skip',
-    })
+    const result = await installWorkflows(getAllCommandIds(), tmpDir, true)
     expect(result.success).toBe(true)
     expect(result.installedPrompts.length).toBeGreaterThan(0)
 
@@ -332,7 +294,7 @@ describe('installWorkflows — prompts installation', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// H. Skills namespace isolation (skills/ccg/)
+// G. Skills namespace isolation (skills/ccg/)
 // ─────────────────────────────────────────────────────────────
 describe('skills namespace isolation', () => {
   const tmpDir = join(tmpdir(), `ccg-test-skills-${Date.now()}`)
@@ -342,9 +304,7 @@ describe('skills namespace isolation', () => {
   })
 
   it('installs skills under skills/ccg/ namespace', async () => {
-    const result = await installWorkflows(['workflow'], tmpDir, true, {
-      mcpProvider: 'skip',
-    })
+    const result = await installWorkflows(['workflow'], tmpDir, true)
     expect(result.success).toBe(true)
     expect(result.installedSkills).toBeGreaterThanOrEqual(6)
 
@@ -392,9 +352,7 @@ describe('skills namespace isolation', () => {
     await fs.writeFile(join(oldSkills, 'brainstorming', 'SKILL.md'), '# User Brainstorming')
 
     // Install triggers migration
-    const result = await installWorkflows(['workflow'], migrateDir, true, {
-      mcpProvider: 'skip',
-    })
+    const result = await installWorkflows(['workflow'], migrateDir, true)
     expect(result.success).toBe(true)
 
     // CCG skills moved to skills/ccg/

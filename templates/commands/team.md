@@ -110,7 +110,7 @@ Phase 8: INTEGRATION   → Lead 全量验证 + 报告 + 清理
    - 补全为结构化需求：明确目标、技术约束、范围边界、验收标准。
 
 2. **生成 mini-PRD**
-   - 用 Glob/Grep/Read 快速扫描项目结构，了解技术栈。
+   - 用 `Glob`/`Grep`/`Read` 快速扫描项目结构，了解技术栈。
    - 写入 `.claude/team-plan/<任务名>-prd.md`：
 
    ```markdown

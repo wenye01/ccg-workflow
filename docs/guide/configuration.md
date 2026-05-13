@@ -70,10 +70,6 @@ npx ccg-workflow menu  # 选「实用工具」
 
 升级到 Node 20+。`ora@9.x` 用了 Node 20 的语法。
 
-**MCP 工具没反应**
-
-跑一下 `npx ccg-workflow diagnose-mcp`。
-
 **Agent Teams 命令找不到**
 
 在 settings.json 里加 `"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"`。这还是实验特性。

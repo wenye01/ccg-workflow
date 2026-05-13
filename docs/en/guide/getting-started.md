@@ -96,4 +96,3 @@ npx ccg-workflow  # Select "Uninstall"
 
 - [Command Reference](/en/guide/commands) — All 28 commands
 - [Workflow Guide](/en/guide/workflows) — Which workflow for which scenario
-- [MCP Configuration](/en/guide/mcp) — Smarter code search

@@ -378,8 +378,8 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   let installSuccess = false
   try {
     const initCommand = isLocalUpdate
-      ? `npx --yes ccg-workflow@latest init --local --project-root ${shellQuote(paths.projectRoot)} --force --skip-mcp --skip-prompt`
-      : `npx --yes ccg-workflow@latest init --force --skip-mcp --skip-prompt`
+      ? `npx --yes ccg-workflow@latest init --local --project-root ${shellQuote(paths.projectRoot)} --force --skip-prompt`
+      : `npx --yes ccg-workflow@latest init --force --skip-prompt`
 
     await execAsync(initCommand, {
       timeout: 300000, // 5min — binary download from GitHub Release may be slow (especially in China)

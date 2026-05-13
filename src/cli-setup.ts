@@ -2,8 +2,6 @@ import type { CAC } from 'cac'
 import type { CliOptions } from './types'
 import ansis from 'ansis'
 import { version } from '../package.json'
-import { configMcp } from './commands/config-mcp'
-import { diagnoseMcp, fixMcp } from './commands/diagnose-mcp'
 import { init } from './commands/init'
 import { showMainMenu } from './commands/menu'
 import { update } from './commands/update'
@@ -22,9 +20,6 @@ function customizeHelp(sections: any[]): any[] {
       `  ${ansis.cyan('ccg')}              ${i18n.t('cli:help.commandDescriptions.showMenu')}`,
       `  ${ansis.cyan('ccg init')} | ${ansis.cyan('i')}     ${i18n.t('cli:help.commandDescriptions.initConfig')}`,
       `  ${ansis.cyan('ccg update')}        Update CCG workflows`,
-      `  ${ansis.cyan('ccg config mcp')}   ${i18n.t('cli:help.commandDescriptions.configMcp')}`,
-      `  ${ansis.cyan('ccg diagnose-mcp')} ${i18n.t('cli:help.commandDescriptions.diagnoseMcp')}`,
-      `  ${ansis.cyan('ccg fix-mcp')}      ${i18n.t('cli:help.commandDescriptions.fixMcp')}`,
       '',
       ansis.gray(`  ${i18n.t('cli:help.shortcuts')}`),
       `  ${ansis.cyan('ccg i')}            ${i18n.t('cli:help.shortcutDescriptions.quickInit')}`,
@@ -99,7 +94,6 @@ export async function setupCommands(cli: CAC): Promise<void> {
     .option('--lang, -l <lang>', `${i18n.t('cli:help.optionDescriptions.displayLanguage')} (zh-CN, en)`)
     .option('--force, -f', i18n.t('cli:help.optionDescriptions.forceOverwrite'))
     .option('--skip-prompt, -s', i18n.t('cli:help.optionDescriptions.skipAllPrompts'))
-    .option('--skip-mcp', 'Skip MCP configuration (used during update)')
     .option('--frontend, -F <models>', i18n.t('cli:help.optionDescriptions.frontendModels'))
     .option('--backend, -B <models>', i18n.t('cli:help.optionDescriptions.backendModels'))
     .option('--mode, -m <mode>', i18n.t('cli:help.optionDescriptions.collaborationMode'))
@@ -119,33 +113,6 @@ export async function setupCommands(cli: CAC): Promise<void> {
     .command('update', 'Update CCG workflows')
     .action(async () => {
       await update()
-    })
-
-  // Diagnose MCP command
-  cli
-    .command('diagnose-mcp', i18n.t('cli:help.commandDescriptions.diagnoseMcp'))
-    .action(async () => {
-      await diagnoseMcp()
-    })
-
-  // Fix MCP command (Windows only)
-  cli
-    .command('fix-mcp', i18n.t('cli:help.commandDescriptions.fixMcp'))
-    .action(async () => {
-      await fixMcp()
-    })
-
-  // Config MCP command
-  cli
-    .command('config <subcommand>', i18n.t('cli:help.commandDescriptions.configMcp'))
-    .action(async (subcommand: string) => {
-      if (subcommand === 'mcp') {
-        await configMcp()
-      }
-      else {
-        console.log(ansis.red(i18n.t('common:unknownSubcommand', { subcommand })))
-        console.log(ansis.gray(i18n.t('common:availableSubcommands', { list: 'mcp' })))
-      }
     })
 
   cli.help(sections => customizeHelp(sections))

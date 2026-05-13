@@ -21,7 +21,7 @@ $ARGUMENTS
 
 **工作目录**：
 - `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
-- 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
+- 如果用户通过 `/add-dir` 添加了多个工作区，先用 `Glob` 定位候选目录、`Grep` 搜索任务关键词，以确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
 **调用语法**（并行用 `run_in_background: true`）：
@@ -80,18 +80,13 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 #### 1.2 上下文检索
 
-**调用 `{{MCP_SEARCH_TOOL}}` 工具**：
+**检索代码上下文**：
 
-```
-{{MCP_SEARCH_TOOL}}({
-  query: "<基于增强后需求构建的语义查询>",
-  project_root_path: "{{WORKDIR}}"
-})
-```
-
-- 使用自然语言构建语义查询（Where/What/How）
+- 用 `Glob` 定位候选文件（入口、模块、组件、测试、配置）
+- 用 `Grep` 搜索关键符号、类型名、路由、错误信息和相关字符串
+- 用 `Read` 读取必要文件，优先完整定义与签名
+- 使用自然语言拆解检索意图（Where/What/How）
 - **禁止基于假设回答**
-- 若 MCP 不可用：回退到 Glob + Grep 进行文件发现与关键符号定位
 
 #### 1.3 完整性检查
 

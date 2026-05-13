@@ -96,4 +96,3 @@ npx ccg-workflow  # 选「卸载工作流」
 
 - [命令参考](/guide/commands) — 28 个命令，总有你用得上的
 - [工作流指南](/guide/workflows) — 什么场景用什么工作流
-- [MCP 配置](/guide/mcp) — 让代码搜索更聪明

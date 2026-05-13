@@ -31,7 +31,7 @@ description: '多模型性能优化：{{BACKEND_PRIMARY}} 后端优化 + {{FRONT
 
 **工作目录**：
 - `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
-- 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
+- 如果用户通过 `/add-dir` 添加了多个工作区，先用 `Glob` 定位候选目录、`Grep` 搜索任务关键词，以确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
 **调用语法**（并行用 `run_in_background: true`）：
@@ -94,7 +94,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 `[模式：研究]`
 
-1. 调用 `{{MCP_SEARCH_TOOL}}` 检索目标代码（如可用）
+1. 使用 `Glob` 定位候选文件、`Grep` 搜索关键符号，并用 `Read` 读取目标代码
 2. 识别性能关键路径
 3. 收集现有指标（如有）
 

@@ -252,23 +252,6 @@ npx ccg-workflow menu  # 选择「安装 Claude Code」
 
 </details>
 
-### MCP 配置
-
-```bash
-npx ccg-workflow menu  # 选择「配置 MCP」
-```
-
-**代码检索**（多选一）：
-- **ace-tool**（推荐）— 代码检索 `search_context` 可用。[官方](https://augmentcode.com/) | [第三方中转](https://acemcp.heroman.wtf/)
-- **fast-context**（推荐）— Windsurf Fast Context，AI 驱动搜索，无需全量索引。需 Windsurf 账号
-- **ContextWeaver**（备选）— 本地混合搜索，需要硅基流动 API Key（免费）
-
-**辅助工具**（可选）：
-- **Context7** — 获取最新库文档（自动安装）
-- **Playwright** — 浏览器自动化 / 测试
-- **DeepWiki** — 知识库查询
-- **Exa** — 搜索引擎（需 API Key）
-
 ### 自动授权 Hook
 
 CCG 安装时自动写入 Hook，自动授权 `codeagent-wrapper` 命令（需 [jq](#安装-jq)）。
@@ -358,7 +341,6 @@ npm uninstall -g ccg-workflow  # npm 全局用户需额外执行
 - [cexll/myclaude](https://github.com/cexll/myclaude) — codeagent-wrapper
 - [UfoMiao/zcf](https://github.com/UfoMiao/zcf) — Git 工具
 - [GudaStudio/skills](https://github.com/GuDaStudio/skills) — 路由设计
-- [ace-tool](https://linux.do/t/topic/1344562) — MCP 工具
 
 ## Star History
 

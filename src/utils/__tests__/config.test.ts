@@ -56,16 +56,6 @@ describe('createDefaultConfig', () => {
     expect(config.workflows.installed).toEqual(['workflow', 'plan'])
   })
 
-  it('defaults mcpProvider to ace-tool', () => {
-    const config = createDefaultConfig(baseOptions)
-    expect(config.mcp.provider).toBe('ace-tool')
-  })
-
-  it('respects custom mcpProvider', () => {
-    const config = createDefaultConfig({ ...baseOptions, mcpProvider: 'contextweaver' })
-    expect(config.mcp.provider).toBe('contextweaver')
-  })
-
   it('defaults liteMode to false', () => {
     const config = createDefaultConfig(baseOptions)
     expect(config.performance?.liteMode).toBe(false)
@@ -96,7 +86,6 @@ describe('mergeConfigs', () => {
       language: 'zh-CN',
       routing: createDefaultRouting(),
       installedWorkflows: ['workflow'],
-      mcpProvider: 'ace-tool',
     })
 
     const merged = mergeConfigs(globalConfig, {

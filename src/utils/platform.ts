@@ -25,7 +25,7 @@ export function isLinux(): boolean {
 }
 
 /**
- * Get platform-specific MCP command wrapper
+ * Get platform-specific command wrapper
  * On Windows, npx/uvx commands need to be wrapped with cmd /c
  *
  * @param command - The command to wrap (e.g., 'npx', 'uvx', 'node')

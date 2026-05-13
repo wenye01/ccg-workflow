@@ -54,7 +54,6 @@ export function mergeConfigs(globalConfig: CcgConfig, localConfig: Partial<CcgCo
       installed: localConfig.workflows?.installed ?? globalConfig.workflows.installed,
     },
     paths: localConfig.paths ?? globalConfig.paths,
-    mcp: { ...globalConfig.mcp, ...localConfig.mcp },
     performance: { ...globalConfig.performance, ...localConfig.performance },
   }
 }
@@ -80,7 +79,6 @@ export function createDefaultConfig(options: {
   language: SupportedLang
   routing: ModelRouting
   installedWorkflows: string[]
-  mcpProvider?: string
   liteMode?: boolean
   skipImpeccable?: boolean
 }): CcgConfig {
@@ -98,10 +96,6 @@ export function createDefaultConfig(options: {
       commands: CLAUDE_COMMANDS_DIR,
       prompts: CCG_PROMPTS_DIR,
       backup: CCG_BACKUP_DIR,
-    },
-    mcp: {
-      provider: options.mcpProvider || 'ace-tool',
-      setup_url: 'https://augmentcode.com/',
     },
     performance: {
       liteMode: options.liteMode || false,

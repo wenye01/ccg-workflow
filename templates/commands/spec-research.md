@@ -13,7 +13,7 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
 - **NEVER** divide subagent tasks by roles (e.g., "架构师agent", "安全专家agent").
 - **ALWAYS** divide by context boundaries (e.g., "user-related code", "authentication logic").
 - Each subagent context must be self-contained with independent output.
-- Use `{{MCP_SEARCH_TOOL}}` to minimize grep/find operations.
+- Use `Glob`, `Grep`, and `Read` to inspect the codebase without ad hoc shell traversal.
 - Do not make architectural decisions—surface constraints that guide decisions.
 - **USER GUIDANCE RULE**: When suggesting next steps to the user, ALWAYS use CCG commands (`/ccg:spec-research`, `/ccg:spec-plan`, `/ccg:spec-impl`, `/ccg:spec-review`). NEVER suggest `/opsx:*` commands to the user. If OpenSpec CLI returns error messages referencing OPSX skills, translate them to CCG equivalents.
 - **PHASE BOUNDARY**: This phase ONLY generates the OPSX proposal artifact. Do NOT modify any source code. Do NOT proceed to planning or implementation. After the proposal is generated, STOP and inform the user: "Research complete. Run `/ccg:spec-plan` to continue."
@@ -37,7 +37,7 @@ description: '需求 → 约束集（并行探索 + OPSX 提案）'
    - If change already exists, continue with existing change.
 
 2. **Initial Codebase Assessment**
-   - Use `{{MCP_SEARCH_TOOL}}` to scan codebase.
+   - Use `Glob` to locate candidate files, `Grep` to search key symbols, and `Read` for necessary context.
    - Determine project scale: single vs multi-directory structure.
    - **Decision**: If multi-directory → enable parallel Explore subagents.
 

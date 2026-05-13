@@ -21,7 +21,7 @@ description: '多模型代码审查：无参数时自动审查 git diff，双模
 
 **工作目录**：
 - `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
-- 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
+- 如果用户通过 `/add-dir` 添加了多个工作区，先用 `Glob` 定位候选目录、`Grep` 搜索任务关键词，以确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
 **调用语法**（并行用 `run_in_background: true`）：
@@ -76,7 +76,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 **有参数时**：使用指定的代码/描述
 
-调用 `{{MCP_SEARCH_TOOL}}` 获取相关上下文。
+使用 `Glob` 定位候选文件、`Grep` 搜索关键符号，并用 `Read` 获取相关上下文。
 
 ### 🔬 阶段 2：并行审查
 

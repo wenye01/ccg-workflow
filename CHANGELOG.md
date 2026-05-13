@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## Unreleased
+
+### 🔄 变更
+
+- **移除 MCP 功能**：CCG 不再安装、配置、诊断或同步 MCP 服务，命令模板改为使用 Glob + Grep 进行代码检索。
+- **旧配置不再自动清理**：如果你曾用旧版 CCG 写入过 MCP 配置，请按需手动删除 `~/.claude.json`、`~/.codex/config.toml`、`~/.gemini/settings.json` 中的相关条目。
+
+---
+
 ## [2.1.16] - 2026-04-10
 
 ### ✨ 新功能

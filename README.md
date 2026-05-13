@@ -255,23 +255,6 @@ Configure in `~/.claude/settings.json` under `"env"`:
 
 </details>
 
-### MCP Configuration
-
-```bash
-npx ccg-workflow menu  # Select "Configure MCP"
-```
-
-**Code retrieval** (choose one):
-- **ace-tool** (recommended) — Code search via `search_context`. [Official](https://augmentcode.com/) | [Third-party proxy](https://acemcp.heroman.wtf/)
-- **fast-context** (recommended) — Windsurf Fast Context, AI-powered search without full-repo indexing. Requires Windsurf account
-- **ContextWeaver** (alternative) — Local hybrid search, requires SiliconFlow API Key (free)
-
-**Optional tools**:
-- **Context7** — Latest library documentation (auto-installed)
-- **Playwright** — Browser automation / testing
-- **DeepWiki** — Knowledge base queries
-- **Exa** — Search engine (requires API Key)
-
 ### Auto-Authorization Hook
 
 CCG automatically installs a Hook to auto-authorize `codeagent-wrapper` commands (requires [jq](#install-jq)).
@@ -361,7 +344,6 @@ Looking for a place to start? Check out issues labeled [`good first issue`](http
 - [cexll/myclaude](https://github.com/cexll/myclaude) — codeagent-wrapper
 - [UfoMiao/zcf](https://github.com/UfoMiao/zcf) — Git tools
 - [GudaStudio/skills](https://github.com/GuDaStudio/skills) — Routing design
-- [ace-tool](https://linux.do/t/topic/1344562) — MCP tool
 
 ## Star History
 

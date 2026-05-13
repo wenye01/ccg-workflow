@@ -1,5 +1,5 @@
 ---
-description: '{{BACKEND_PRIMARY}} 全权执行计划 - 读取 /ccg:plan 产出的计划文件，{{BACKEND_PRIMARY}} 承担 MCP 搜索 + 代码实现 + 测试并返回 batch 结果'
+description: '{{BACKEND_PRIMARY}} 全权执行计划 - 读取 /ccg:plan 产出的计划文件，{{BACKEND_PRIMARY}} 承担文件检索、代码实现和测试并返回 batch 结果'
 ---
 
 # Codex-Exec - Codex 全权执行计划
@@ -15,7 +15,7 @@ $ARGUMENTS
 ```
 /ccg:plan → 多模型协同规划（Codex ∥ Gemini 分析 → Claude 综合）
                 ↓ 计划文件 (.claude/plan/xxx.md)
-/ccg:codex-exec → Codex 全权执行（MCP 搜索 + 代码实现 + 测试）
+/ccg:codex-exec → Codex 全权执行（文件检索 + 代码实现 + 测试）
                 ↓ batch 执行结果
 ```
 
@@ -24,7 +24,7 @@ $ARGUMENTS
 | 维度 | `/ccg:execute` | `/ccg:codex-exec` |
 |------|---------------|-------------------|
 | 代码实现 | {{BACKEND_PRIMARY}}/{{FRONTEND_PRIMARY}} 直接实现 | **{{BACKEND_PRIMARY}} 直接实现** |
-| MCP 搜索 | Claude 调用 MCP | **{{BACKEND_PRIMARY}} 调用 MCP** |
+| 文件检索 | Claude 使用 `Glob` 和 `Grep` | **{{BACKEND_PRIMARY}} 使用 `Glob` 和 `Grep`** |
 | Claude 上下文 | 低（只收集 batch 结果） | **极低（只看 batch 摘要）** |
 | Claude token | 大量消耗 | **极少消耗** |
 | 二次处理 | 无 | **无** |
@@ -42,7 +42,7 @@ $ARGUMENTS
 
 **工作目录**：
 - `{{WORKDIR}}`：**必须通过 Bash 执行 `pwd`（Unix）或 `cd`（Windows CMD）获取当前工作目录的绝对路径**，禁止从 `$HOME` 或环境变量推断
-- 如果用户通过 `/add-dir` 添加了多个工作区，先用 Glob/Grep 确定任务相关的工作区
+- 如果用户通过 `/add-dir` 添加了多个工作区，先用 `Glob` 定位候选目录、`Grep` 搜索任务关键词，以确定任务相关的工作区
 - 如果无法确定，用 `AskUserQuestion` 询问用户选择目标工作区
 
 **{{BACKEND_PRIMARY}} 执行调用语法**：
@@ -120,7 +120,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
    **步骤**：<N 步>
    **关键文件**：<N 个>
 
-   Codex 将自主完成：MCP 搜索 + 代码实现 + 测试验证，并返回 batch 执行结果
+   Codex 将自主完成：文件定位、符号搜索、代码实现和测试验证，并返回 batch 执行结果
 
    确认执行？(Y/N)
    ```
@@ -146,10 +146,10 @@ You are a full-stack execution agent. Implement the following plan end-to-end.
 
 ### Step 1: Context Verification
 Before coding, verify you have sufficient context:
-- Use ace-tool MCP (search_context) to search for relevant existing code patterns
+- Use Glob to locate candidate files and Grep to search relevant symbols, routes, types, errors, and strings
 - Read the key files listed in the plan to understand current implementation
-- If the plan references external libraries/APIs, use context7 MCP to query their latest documentation
-- If latest information is needed, use grok-search MCP for web search
+- If the plan references external libraries/APIs, consult official docs or project docs
+- If latest information is needed, use web search
 
 ### Step 2: Implementation
 Implement each step from the plan in order:
@@ -171,7 +171,7 @@ After implementation:
 Respond with a structured report:
 
 ### CONTEXT_GATHERED
-<What information was searched/found, key findings from MCP tools>
+<What information was searched/found, key findings from code search>
 
 ### CHANGES_MADE
 For each file changed:
@@ -228,7 +228,7 @@ EXEC_EOF",
 |------|------|
 | 计划 | <计划文件路径> |
 | 模式 | Codex 全权执行 |
-| 搜索 | <Codex 使用了哪些 MCP 工具，关键发现> |
+| 搜索 | <Codex 检索了哪些文件/符号，关键发现> |
 | 变更 | <N 个文件，+X/-Y 行> |
 | 测试 | <通过/失败> |
 | Batch | <SESSION_ID / batch 标识> |
@@ -247,8 +247,8 @@ EXEC_EOF",
 
 ## 关键规则
 
-1. **Claude 极简原则** — Claude 不调用 MCP、不做代码检索、不做二次处理，只读取计划并收集 batch 结果。
-2. **{{BACKEND_PRIMARY}} 全权执行** — MCP 搜索、文档查询、代码检索、实现、测试全由 {{BACKEND_PRIMARY}} 完成。
+1. **Claude 极简原则** — Claude 不做代码检索、不做二次处理，只读取计划并收集 batch 结果。
+2. **{{BACKEND_PRIMARY}} 全权执行** — 文件检索、文档查询、代码读取、实现、测试全由 {{BACKEND_PRIMARY}} 完成。
 3. **结果返回** — 外部模型只需返回 batch 执行结果与变更摘要。
 4. **信任规则** — 后端以 {{BACKEND_PRIMARY}} 为准，前端以 {{FRONTEND_PRIMARY}} 为准。
 5. **一次性下发** — 尽量一次给 Codex 完整指令 + 完整计划，减少来回通信。

@@ -48,7 +48,7 @@
 | `workflow.md` | `/ccg:workflow` | 多模型协作开发工作流（研究→构思→计划→执行→优化→评审），智能路由前端/后端 |
 | `plan.md` | `/ccg:plan` | 多模型协作规划：上下文检索 + 双模型分析 → 生成 Step-by-step 实施计划 |
 | `execute.md` | `/ccg:execute` | 多模型协作执行：根据计划多模型直接实施 → 返回执行结果 |
-| `codex-exec.md` | `/ccg:codex-exec` | 后端模型全权执行计划：MCP 搜索 + 代码实现 + 测试，返回 batch 结果 |
+| `codex-exec.md` | `/ccg:codex-exec` | 后端模型全权执行计划：文件检索 + 代码实现 + 测试，返回 batch 结果 |
 | `feat.md` | `/ccg:feat` | 智能功能开发：自动识别输入类型，规划/讨论/实施全流程 |
 | `frontend.md` | `/ccg:frontend` | 前端专项工作流（研究→构思→计划→执行→优化→评审），前端主模型主导 |
 | `backend.md` | `/ccg:backend` | 后端专项工作流（研究→构思→计划→执行→优化→评审），后端主模型主导 |
@@ -101,7 +101,7 @@
 
 | 命令文件 | slash command | 描述 |
 |----------|--------------|------|
-| `spec-init.md` | `/ccg:spec-init` | 初始化 OPSX 环境 + 验证多模型 MCP 工具 |
+| `spec-init.md` | `/ccg:spec-init` | 初始化 OPSX 环境 + 验证多模型后端 |
 | `spec-research.md` | `/ccg:spec-research` | 需求 → 约束集（并行探索 + OPSX 提案） |
 | `spec-plan.md` | `/ccg:spec-plan` | 多模型分析 → 消除歧义 → 零决策可执行计划 |
 | `spec-impl.md` | `/ccg:spec-impl` | 按规范执行 + 多模型协作 + 归档 |
@@ -329,17 +329,6 @@
 | `{{REVIEW_MODELS}}` | `["codex","gemini"]` | 审查模型列表（JSON 数组） |
 | `{{GEMINI_MODEL_FLAG}}` | `--gemini-model gemini-3.1-pro-preview ` | 使用 gemini 时传给 wrapper，否则为空字符串（v2.1.14 修复：安装时替换，不留到运行时） |
 | `{{LITE_MODE_FLAG}}` | `""` | 轻量模式时为 `--lite `，影响 codeagent-wrapper 行为 |
-| `{{MCP_SEARCH_TOOL}}` | `mcp__ace-tool__search_context` | MCP provider 注册表驱动，支持 ace-tool/contextweaver/fast-context/skip |
-
-**MCP provider 注册表**（`installer-template.ts:50`）：
-
-```
-ace-tool      → mcp__ace-tool__search_context        (param: query)
-ace-tool-rs   → mcp__ace-tool__search_context        (param: query)
-contextweaver → mcp__contextweaver__codebase-retrieval (param: information_request)
-fast-context  → mcp__fast-context__fast_context_search (param: query)
-skip          → 移除 MCP 调用，降级为 Glob + Grep 说明
-```
 
 ---
 

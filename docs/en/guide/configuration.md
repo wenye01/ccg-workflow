@@ -70,10 +70,6 @@ Set `CODEAGENT_POST_MESSAGE_DELAY` to `1`. Known issue with Codex CLI 0.80.0 in 
 
 Upgrade to Node 20+. `ora@9.x` uses Node 20 syntax.
 
-**MCP tools not responding**
-
-Run `npx ccg-workflow diagnose-mcp`.
-
 **Can't find Agent Teams commands**
 
 Add `"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"` to your settings.json env. It's still experimental.

@@ -16,10 +16,7 @@ export {
   getWorkflowConfigs,
   getWorkflowById,
   installWorkflows,
-  installAceTool,
-  installAceToolRs,
   uninstallWorkflows,
-  uninstallAceTool,
 } from './utils/installer'
 export {
   migrateToV1_4_0,

@@ -38,11 +38,6 @@ export const CLAUDE_RULES_DIR = join(CLAUDE_DIR, 'rules')
 export const CLAUDE_OUTPUT_STYLES_DIR = join(CLAUDE_DIR, 'output-styles')
 export const CLAUDE_SETTINGS_FILE = join(CLAUDE_DIR, 'settings.json')
 
-// Other tool configuration paths
-export const CLAUDE_JSON_FILE = join(homedir(), '.claude.json')
-export const CODEX_CONFIG_FILE = join(homedir(), '.codex', 'config.toml')
-export const GEMINI_SETTINGS_FILE = join(homedir(), '.gemini', 'settings.json')
-
 // Legacy paths for migration detection
 export const LEGACY_CCG_DIR = join(homedir(), '.claude', '.ccg')
 export const LEGACY_BIN_DIR = join(homedir(), '.claude', 'bin')
