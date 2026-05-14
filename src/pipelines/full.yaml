@@ -1,0 +1,133 @@
+version: 1
+name: full
+description: Full six-stage workflow for research, planning, implementation, optimization, and review.
+policies:
+  approval: on-failure
+  on_failure: abort
+  max_retries: 1
+steps:
+  - id: research
+    role: research
+    backend: gemini
+    prompt_template: templates/prompts/gemini/analyzer.md
+    outputs:
+      - type: research_report
+        version: 1
+        schema:
+          type: object
+          required: [summary, findings]
+          properties:
+            summary:
+              type: string
+            findings:
+              type: array
+              items:
+                type: string
+  - id: conception
+    role: planning
+    backend: claude
+    prompt_template: templates/prompts/claude/architect.md
+    inputs:
+      - artifact: research_report
+        version: 1
+    bindings:
+      RESEARCH_SUMMARY: research_report.summary
+    outputs:
+      - type: concept
+        version: 1
+        schema:
+          type: object
+          required: [summary, approach]
+          properties:
+            summary:
+              type: string
+            approach:
+              type: string
+  - id: plan
+    role: planning
+    backend: codex
+    prompt_template: templates/prompts/codex/architect.md
+    inputs:
+      - artifact: concept
+        version: 1
+    bindings:
+      CONCEPT_APPROACH: concept.approach
+    outputs:
+      - type: plan
+        version: 1
+        schema:
+          type: object
+          required: [summary, tasks]
+          properties:
+            summary:
+              type: string
+            tasks:
+              type: array
+              items:
+                type: string
+  - id: develop
+    role: implementation
+    backend: codex
+    prompt_template: templates/prompts/codex/debugger.md
+    inputs:
+      - artifact: plan
+        version: 1
+    bindings:
+      PLAN_SUMMARY: plan.summary
+    outputs:
+      - type: implementation
+        version: 1
+        schema:
+          type: object
+          required: [summary, files_changed]
+          properties:
+            summary:
+              type: string
+            files_changed:
+              type: array
+              items:
+                type: string
+  - id: optimize
+    role: optimization
+    backend: gemini
+    prompt_template: templates/prompts/gemini/optimizer.md
+    inputs:
+      - artifact: implementation
+        version: 1
+    bindings:
+      IMPLEMENTATION_SUMMARY: implementation.summary
+    outputs:
+      - type: optimization_report
+        version: 1
+        schema:
+          type: object
+          required: [summary, recommendations]
+          properties:
+            summary:
+              type: string
+            recommendations:
+              type: array
+              items:
+                type: string
+  - id: review
+    role: review
+    backend: claude
+    prompt_template: templates/prompts/claude/reviewer.md
+    inputs:
+      - artifact: optimization_report
+        version: 1
+    bindings:
+      OPTIMIZATION_SUMMARY: optimization_report.summary
+    outputs:
+      - type: review_report
+        version: 1
+        schema:
+          type: object
+          required: [status, findings]
+          properties:
+            status:
+              type: string
+            findings:
+              type: array
+              items:
+                type: string

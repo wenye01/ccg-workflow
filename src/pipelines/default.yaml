@@ -1,0 +1,67 @@
+version: 1
+name: default
+description: Default linear workflow from planning to implementation and QA.
+policies:
+  approval: never
+  on_failure: abort
+  max_retries: 0
+steps:
+  - id: plan
+    role: planning
+    backend: codex
+    prompt_template: templates/prompts/codex/architect.md
+    outputs:
+      - type: plan
+        version: 1
+        schema:
+          type: object
+          required: [summary, tasks]
+          properties:
+            summary:
+              type: string
+            tasks:
+              type: array
+              items:
+                type: string
+  - id: develop
+    role: implementation
+    backend: codex
+    prompt_template: templates/prompts/codex/debugger.md
+    inputs:
+      - artifact: plan
+        version: 1
+    bindings:
+      PLAN_SUMMARY: plan.summary
+    outputs:
+      - type: implementation
+        version: 1
+        schema:
+          type: object
+          required: [summary, files_changed]
+          properties:
+            summary:
+              type: string
+            files_changed:
+              type: array
+              items:
+                type: string
+  - id: qa
+    role: quality_assurance
+    backend: codex
+    prompt_template: templates/prompts/codex/tester.md
+    inputs:
+      - artifact: implementation
+        version: 1
+    bindings:
+      IMPLEMENTATION_SUMMARY: implementation.summary
+    outputs:
+      - type: qa_report
+        version: 1
+        schema:
+          type: object
+          required: [status, summary]
+          properties:
+            status:
+              type: string
+            summary:
+              type: string

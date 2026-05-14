@@ -1,0 +1,177 @@
+version: 1
+name: team
+description: Agent team workflow with linear Phase 1 scheduling.
+policies:
+  approval: on-failure
+  on_failure: abort
+  max_retries: 1
+steps:
+  - id: intake
+    role: research
+    backend: codex
+    prompt_template: templates/commands/agents/init-architect.md
+    outputs:
+      - type: intake_brief
+        version: 1
+        schema:
+          type: object
+          required: [summary, goals]
+          properties:
+            summary:
+              type: string
+            goals:
+              type: array
+              items:
+                type: string
+  - id: research
+    role: research
+    backend: gemini
+    prompt_template: templates/prompts/gemini/analyzer.md
+    inputs:
+      - artifact: intake_brief
+        version: 1
+    bindings:
+      INTAKE_SUMMARY: intake_brief.summary
+    outputs:
+      - type: research_report
+        version: 1
+        schema:
+          type: object
+          required: [summary, findings]
+          properties:
+            summary:
+              type: string
+            findings:
+              type: array
+              items:
+                type: string
+  - id: architecture
+    role: planning
+    backend: claude
+    prompt_template: templates/commands/agents/team-architect.md
+    inputs:
+      - artifact: research_report
+        version: 1
+    bindings:
+      RESEARCH_SUMMARY: research_report.summary
+    outputs:
+      - type: architecture_plan
+        version: 1
+        schema:
+          type: object
+          required: [summary, decisions]
+          properties:
+            summary:
+              type: string
+            decisions:
+              type: array
+              items:
+                type: string
+  - id: plan
+    role: planning
+    backend: codex
+    prompt_template: templates/commands/agents/planner.md
+    inputs:
+      - artifact: architecture_plan
+        version: 1
+    bindings:
+      ARCHITECTURE_SUMMARY: architecture_plan.summary
+    outputs:
+      - type: plan
+        version: 1
+        schema:
+          type: object
+          required: [summary, tasks]
+          properties:
+            summary:
+              type: string
+            tasks:
+              type: array
+              items:
+                type: string
+  - id: implement
+    role: implementation
+    backend: codex
+    prompt_template: templates/prompts/codex/debugger.md
+    inputs:
+      - artifact: plan
+        version: 1
+    bindings:
+      PLAN_SUMMARY: plan.summary
+    outputs:
+      - type: implementation
+        version: 1
+        schema:
+          type: object
+          required: [summary, files_changed]
+          properties:
+            summary:
+              type: string
+            files_changed:
+              type: array
+              items:
+                type: string
+  - id: qa
+    role: quality_assurance
+    backend: codex
+    prompt_template: templates/commands/agents/team-qa.md
+    inputs:
+      - artifact: implementation
+        version: 1
+    bindings:
+      IMPLEMENTATION_SUMMARY: implementation.summary
+    outputs:
+      - type: qa_report
+        version: 1
+        schema:
+          type: object
+          required: [status, summary]
+          properties:
+            status:
+              type: string
+            summary:
+              type: string
+  - id: optimize
+    role: optimization
+    backend: gemini
+    prompt_template: templates/prompts/gemini/optimizer.md
+    inputs:
+      - artifact: qa_report
+        version: 1
+    bindings:
+      QA_SUMMARY: qa_report.summary
+    outputs:
+      - type: optimization_report
+        version: 1
+        schema:
+          type: object
+          required: [summary, recommendations]
+          properties:
+            summary:
+              type: string
+            recommendations:
+              type: array
+              items:
+                type: string
+  - id: review
+    role: review
+    backend: claude
+    prompt_template: templates/commands/agents/team-reviewer.md
+    inputs:
+      - artifact: optimization_report
+        version: 1
+    bindings:
+      OPTIMIZATION_SUMMARY: optimization_report.summary
+    outputs:
+      - type: review_report
+        version: 1
+        schema:
+          type: object
+          required: [status, findings]
+          properties:
+            status:
+              type: string
+            findings:
+              type: array
+              items:
+                type: string

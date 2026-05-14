@@ -96,4 +96,5 @@ export interface InstallResult {
 
 // Re-export CLI types
 export * from './cli'
+export type * from '../runtime/types'
 export type { InstallScope, ResolvedPaths } from '../utils/paths'

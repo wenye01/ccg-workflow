@@ -27,6 +27,8 @@
   "files": [
     "bin/ccg.mjs",
     "dist",
+    "schemas/",
+    "src/pipelines/",
     "templates/commands/analyze.md",
     "templates/commands/backend.md",
     "templates/commands/clean-branches.md",
@@ -91,7 +93,8 @@
     "inquirer": "^12.9.6",
     "ora": "^9.0.0",
     "pathe": "^2.0.3",
-    "smol-toml": "^1.4.2"
+    "smol-toml": "^1.4.2",
+    "yaml": "^2.9.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]

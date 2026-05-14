@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ccg.dev/schemas/pipeline.schema.json",
+  "title": "CCG Pipeline Config",
+  "type": "object",
+  "required": ["version", "name", "policies", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "policies": {
+      "type": "object",
+      "required": ["approval", "on_failure"],
+      "additionalProperties": false,
+      "properties": {
+        "approval": { "enum": ["never", "on-failure", "always"] },
+        "on_failure": { "enum": ["abort", "retry", "skip", "fallback"] },
+        "max_retries": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifactSchema" }
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "required": ["id", "role", "backend"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "role": {
+          "enum": [
+            "research",
+            "planning",
+            "implementation",
+            "quality_assurance",
+            "review",
+            "optimization"
+          ]
+        },
+        "backend": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/inputBinding" }
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/outputBinding" }
+        },
+        "bindings": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "prompt_template": { "type": "string" },
+        "policies": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "approval": { "enum": ["never", "always"] },
+            "on_failure": { "enum": ["abort", "retry", "skip"] },
+            "max_retries": { "type": "integer", "minimum": 0 },
+            "timeout_seconds": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "inputBinding": {
+      "type": "object",
+      "required": ["artifact", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "artifact": { "type": "string", "minLength": 1 },
+        "version": { "type": "integer", "minimum": 1 },
+        "required": { "type": "boolean" }
+      }
+    },
+    "outputBinding": {
+      "type": "object",
+      "required": ["type", "version", "schema"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "version": { "type": "integer", "minimum": 1 },
+        "schema": { "type": "object" },
+        "required": { "type": "boolean" }
+      }
+    },
+    "artifactSchema": {
+      "type": "object",
+      "required": ["type", "version", "schema"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "version": { "type": "integer", "minimum": 1 },
+        "schema": { "type": "object" }
+      }
+    }
+  }
+}
