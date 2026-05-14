@@ -22,6 +22,8 @@ type Config struct {
 	MaxParallelWorkers int
 	GeminiModel        string // Gemini model name (empty = use default)
 	Progress           bool   // Emit compact progress lines to stderr
+	JSONOutput         bool   // Emit structured StepResult JSON
+	OutputSchemaPath   string // Optional JSON schema file for structured artifact extraction
 }
 
 // ParallelConfig defines the JSON schema for parallel execution
@@ -61,6 +63,18 @@ type TaskResult struct {
 	TestsPassed    int      `json:"tests_passed,omitempty"`    // number of tests passed
 	TestsFailed    int      `json:"tests_failed,omitempty"`    // number of tests failed
 	sharedLog      bool
+}
+
+// StepResult is the structured single-step result emitted by --json-output.
+type StepResult struct {
+	Success    bool                   `json:"success"`
+	SessionID  string                 `json:"session_id,omitempty"`
+	Message    string                 `json:"message"`
+	Artifacts  map[string]interface{} `json:"artifacts,omitempty"`
+	ExitCode   int                    `json:"exit_code"`
+	Error      string                 `json:"error,omitempty"`
+	LogPath    string                 `json:"log_path,omitempty"`
+	DurationMs int64                  `json:"duration_ms"`
 }
 
 var backendRegistry = map[string]Backend{
@@ -206,6 +220,8 @@ func parseArgs() (*Config, error) {
 	backendName := defaultBackendName
 	skipPermissions := envFlagEnabled("CODEAGENT_SKIP_PERMISSIONS")
 	progress := false
+	jsonOutput := false
+	outputSchemaPath := ""
 	filtered := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -251,6 +267,26 @@ func parseArgs() (*Config, error) {
 		case arg == "--progress":
 			progress = true
 			continue
+		case arg == "--json-output":
+			jsonOutput = true
+			continue
+		case arg == "--output-schema":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--output-schema flag requires a value")
+			}
+			outputSchemaPath = strings.TrimSpace(args[i+1])
+			if outputSchemaPath == "" {
+				return nil, fmt.Errorf("--output-schema flag requires a non-empty path")
+			}
+			i++
+			continue
+		case strings.HasPrefix(arg, "--output-schema="):
+			value := strings.TrimSpace(strings.TrimPrefix(arg, "--output-schema="))
+			if value == "" {
+				return nil, fmt.Errorf("--output-schema flag requires a non-empty path")
+			}
+			outputSchemaPath = value
+			continue
 		case strings.HasPrefix(arg, "--skip-permissions="):
 			skipPermissions = parseBoolFlag(strings.TrimPrefix(arg, "--skip-permissions="), skipPermissions)
 			continue
@@ -266,7 +302,15 @@ func parseArgs() (*Config, error) {
 	}
 	args = filtered
 
-	cfg := &Config{WorkDir: defaultWorkdir, Backend: backendName, SkipPermissions: skipPermissions, GeminiModel: geminiModel, Progress: progress}
+	cfg := &Config{
+		WorkDir:          defaultWorkdir,
+		Backend:          backendName,
+		SkipPermissions:  skipPermissions,
+		GeminiModel:      geminiModel,
+		Progress:         progress,
+		JSONOutput:       jsonOutput,
+		OutputSchemaPath: outputSchemaPath,
+	}
 	cfg.MaxParallelWorkers = resolveMaxParallelWorkers()
 
 	if args[0] == "resume" {

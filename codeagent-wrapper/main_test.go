@@ -904,6 +904,7 @@ func TestRunCodexTask_ForcesStopAfterCompletion(t *testing.T) {
 		t.Skip("skipping timing-sensitive integration test in short mode")
 	}
 	defer resetTestHooks()
+	t.Setenv("CODEAGENT_POST_MESSAGE_DELAY", "0")
 	forceKillDelay.Store(0)
 
 	fake := newFakeCmd(fakeCmdConfig{
@@ -943,6 +944,7 @@ func TestRunCodexTask_DoesNotTerminateBeforeThreadCompleted(t *testing.T) {
 		t.Skip("skipping timing-sensitive integration test in short mode")
 	}
 	defer resetTestHooks()
+	t.Setenv("CODEAGENT_POST_MESSAGE_DELAY", "0")
 	forceKillDelay.Store(0)
 
 	fake := newFakeCmd(fakeCmdConfig{

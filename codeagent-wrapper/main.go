@@ -471,6 +471,17 @@ func run() (exitCode int) {
 
 	logInfo(fmt.Sprintf("%s running...", cfg.Backend))
 
+	var outputSchema map[string]interface{}
+	if cfg.OutputSchemaPath != "" {
+		var err error
+		outputSchema, err = loadOutputSchema(cfg.OutputSchemaPath)
+		if err != nil {
+			logError("Failed to load output schema: " + err.Error())
+			return 1
+		}
+		taskText = appendOutputSchemaInstruction(taskText, outputSchema)
+	}
+
 	taskSpec := TaskSpec{
 		Task:      taskText,
 		WorkDir:   cfg.WorkDir,
@@ -480,7 +491,37 @@ func run() (exitCode int) {
 		Progress:  cfg.Progress,
 	}
 
+	startedAt := time.Now()
 	result := runTaskFn(taskSpec, false, cfg.Timeout)
+	durationMs := time.Since(startedAt).Milliseconds()
+
+	if cfg.JSONOutput {
+		var artifacts map[string]interface{}
+		if result.ExitCode == 0 && result.Message != "" && len(outputSchema) > 0 {
+			extracted, err := extractJSONFromOutput(result.Message)
+			if err != nil {
+				logWarn("Failed to extract structured JSON output: " + err.Error())
+			} else {
+				validationErrors := newSchemaValidator(outputSchema).Validate(extracted)
+				if len(validationErrors) > 0 {
+					for _, validationErr := range validationErrors {
+						logWarn(fmt.Sprintf("Output schema validation warning: %s %s", validationErr.Field, validationErr.Message))
+					}
+				} else {
+					artifacts = extracted
+				}
+			}
+		}
+
+		payload := buildStepResult(result, artifacts, durationMs)
+		data, err := jsonMarshal(payload)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: failed to marshal step result: %v\n", err)
+			return 1
+		}
+		fmt.Println(string(data))
+		return result.ExitCode
+	}
 
 	if result.ExitCode != 0 {
 		return result.ExitCode
@@ -556,6 +597,7 @@ Usage:
     %[1]s resume <session_id> - [workdir]
     %[1]s --parallel               Run tasks in parallel (config from stdin)
     %[1]s --parallel --full-output Run tasks in parallel with full output (legacy)
+    %[1]s --json-output "task" [workdir]
     %[1]s --version
     %[1]s --help
 
@@ -573,6 +615,8 @@ Options:
                           CLI parameter takes precedence over environment variable
                           Examples: gemini-2.5-flash, gemini-1.5-pro
     --progress            Emit compact progress lines to stderr during execution
+    --json-output         Emit structured StepResult JSON for single-task mode
+    --output-schema <path> Append schema instructions and extract JSON artifacts
 
 Environment Variables:
     CODEX_TIMEOUT              Timeout in milliseconds (default: 7200000)
