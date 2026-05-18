@@ -135,6 +135,18 @@ func TestClaudeBuildArgs_GeminiAndCodexModes(t *testing.T) {
 		}
 	})
 
+	t.Run("codex build args includes model when configured", func(t *testing.T) {
+		t.Setenv("CODEX_REQUIRE_APPROVAL", "")
+
+		backend := CodexBackend{}
+		cfg := &Config{Mode: "new", WorkDir: "/tmp", CodexModel: "gpt-5.4-mini"}
+		got := backend.BuildArgs(cfg, "task")
+		want := []string{"e", "-m", "gpt-5.4-mini", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-C", "/tmp", "--json", "task"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
+
 	t.Run("progress flag does not affect backend args", func(t *testing.T) {
 		backend := CodexBackend{}
 		cfg := &Config{Mode: "new", WorkDir: "/tmp", Progress: true}

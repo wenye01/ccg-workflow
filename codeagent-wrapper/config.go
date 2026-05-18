@@ -20,6 +20,7 @@ type Config struct {
 	Backend            string
 	SkipPermissions    bool
 	MaxParallelWorkers int
+	CodexModel         string // Codex model name (empty = use default)
 	GeminiModel        string // Gemini model name (empty = use default)
 	Progress           bool   // Emit compact progress lines to stderr
 	JSONOutput         bool   // Emit structured StepResult JSON
@@ -214,10 +215,12 @@ func parseArgs() (*Config, error) {
 		return nil, fmt.Errorf("task required")
 	}
 
-	// Read environment variable (lowest precedence)
+	// Read environment variables (lowest precedence)
+	codexModel := strings.TrimSpace(os.Getenv("CODEX_MODEL"))
 	geminiModel := strings.TrimSpace(os.Getenv("GEMINI_MODEL"))
 
 	backendName := defaultBackendName
+	model := ""
 	skipPermissions := envFlagEnabled("CODEAGENT_SKIP_PERMISSIONS")
 	progress := false
 	jsonOutput := false
@@ -242,6 +245,42 @@ func parseArgs() (*Config, error) {
 				return nil, fmt.Errorf("--backend flag requires a value")
 			}
 			backendName = value
+			continue
+		case arg == "--model":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--model flag requires a non-empty model name")
+			}
+			value := strings.TrimSpace(args[i+1])
+			if value == "" {
+				return nil, fmt.Errorf("--model flag requires a non-empty model name")
+			}
+			model = value
+			i++
+			continue
+		case strings.HasPrefix(arg, "--model="):
+			value := strings.TrimSpace(strings.TrimPrefix(arg, "--model="))
+			if value == "" {
+				return nil, fmt.Errorf("--model flag requires a non-empty model name")
+			}
+			model = value
+			continue
+		case arg == "--codex-model":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--codex-model flag requires a non-empty model name")
+			}
+			value := strings.TrimSpace(args[i+1])
+			if value == "" {
+				return nil, fmt.Errorf("--codex-model flag requires a non-empty model name")
+			}
+			codexModel = value
+			i++
+			continue
+		case strings.HasPrefix(arg, "--codex-model="):
+			value := strings.TrimSpace(strings.TrimPrefix(arg, "--codex-model="))
+			if value == "" {
+				return nil, fmt.Errorf("--codex-model flag requires a non-empty model name")
+			}
+			codexModel = value
 			continue
 		case arg == "--gemini-model":
 			if i+1 >= len(args) {
@@ -302,10 +341,19 @@ func parseArgs() (*Config, error) {
 	}
 	args = filtered
 
+	if model != "" {
+		if strings.EqualFold(backendName, "gemini") {
+			geminiModel = model
+		} else {
+			codexModel = model
+		}
+	}
+
 	cfg := &Config{
 		WorkDir:          defaultWorkdir,
 		Backend:          backendName,
 		SkipPermissions:  skipPermissions,
+		CodexModel:       codexModel,
 		GeminiModel:      geminiModel,
 		Progress:         progress,
 		JSONOutput:       jsonOutput,
