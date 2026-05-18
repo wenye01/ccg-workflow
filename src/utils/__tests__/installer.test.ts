@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import fs from 'fs-extra'
 import { getAllCommandIds, getWorkflowById, getWorkflowConfigs, injectConfigVariables, installWorkflows, uninstallWorkflows } from '../installer'
+import { buildLocalCodeagentWrapper } from './localBinary'
 
 // Helper: find package root
 function findPackageRoot(): string {
@@ -22,6 +23,15 @@ function findPackageRoot(): string {
 
 const PACKAGE_ROOT = findPackageRoot()
 const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'commands')
+let localBinary: ReturnType<typeof buildLocalCodeagentWrapper>
+
+beforeAll(() => {
+  localBinary = buildLocalCodeagentWrapper()
+}, 30_000)
+
+afterAll(() => {
+  localBinary?.cleanup()
+})
 
 // ─────────────────────────────────────────────────────────────
 // A. Workflow registry consistency

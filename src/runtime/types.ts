@@ -192,6 +192,7 @@ export interface OrchestratorCallbacks {
   onStepFailed?: (step: CompiledStep, error: Error, state: RunState) => void | Promise<void>
   onApprovalRequired?: (step: CompiledStep, state: RunState) => Promise<boolean>
   onArtifactProduced?: (artifact: Artifact, state: RunState) => void | Promise<void>
+  onComplete?: (state: RunState) => void | Promise<void>
 }
 
 export interface ValidationResult {

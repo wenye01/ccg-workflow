@@ -141,6 +141,11 @@ export function schemaHasPath(schema: Record<string, unknown>, path: string): bo
       return false
     }
 
+    if (current.type === 'array' && /^\d+$/.test(part)) {
+      current = isRecord(current.items) ? current.items : {}
+      continue
+    }
+
     const properties = current.properties
     if (!isRecord(properties) || !isRecord(properties[part])) {
       return false
@@ -262,13 +267,14 @@ function validateArtifactDecl(artifact: unknown, prefix: string, errors: string[
 }
 
 function parseBinding(binding: string): { artifact: string, path: string } | null {
-  const dot = binding.indexOf('.')
-  if (dot <= 0 || dot === binding.length - 1) {
+  const source = binding.split('|', 1)[0].trim()
+  const dot = source.indexOf('.')
+  if (dot <= 0 || dot === source.length - 1) {
     return null
   }
   return {
-    artifact: binding.slice(0, dot),
-    path: binding.slice(dot + 1),
+    artifact: source.slice(0, dot),
+    path: source.slice(dot + 1),
   }
 }
 

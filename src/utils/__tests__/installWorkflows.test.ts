@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import fs from 'fs-extra'
 import { getAllCommandIds, installWorkflows } from '../installer'
+import { buildLocalCodeagentWrapper } from './localBinary'
 
 const ALL_IDS = getAllCommandIds()
 
@@ -23,8 +24,14 @@ function collectMdFiles(dir: string): string[] {
 
 describe('installWorkflows E2E', () => {
   const tmpDir = join(tmpdir(), `ccg-test-install-${Date.now()}`)
+  let localBinary: ReturnType<typeof buildLocalCodeagentWrapper>
+
+  beforeAll(() => {
+    localBinary = buildLocalCodeagentWrapper()
+  }, 30_000)
 
   afterAll(async () => {
+    localBinary?.cleanup()
     await fs.remove(tmpDir)
   })
 

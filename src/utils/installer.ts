@@ -186,6 +186,18 @@ async function downloadBinaryFromRelease(binaryName: string, destPath: string): 
   return false
 }
 
+async function installBinaryFromLocalSource(destPath: string): Promise<boolean> {
+  const sourcePath = process.env.CCG_WORKFLOW_LOCAL_BINARY
+  if (!sourcePath) return false
+  if (!(await fs.pathExists(sourcePath))) return false
+
+  await fs.copyFile(sourcePath, destPath)
+  if (process.platform !== 'win32') {
+    await fs.chmod(destPath, 0o755)
+  }
+  return true
+}
+
 // ═══════════════════════════════════════════════════════
 // Shared file-copy helper
 // ═══════════════════════════════════════════════════════
@@ -669,7 +681,8 @@ async function installBinaryFile(ctx: InstallContext): Promise<void> {
       }
     }
 
-    const installed = await downloadBinaryFromRelease(binaryName, destBinary)
+    const installed = await installBinaryFromLocalSource(destBinary)
+      || await downloadBinaryFromRelease(binaryName, destBinary)
 
     if (installed) {
       try {
