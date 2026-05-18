@@ -37,10 +37,17 @@ export class Orchestrator {
   }
 
   async run(): Promise<RunState> {
-    let state = await this.stateManager.create(this.options.pipeline, this.options.runId)
+    let state = await this.loadOrCreateState()
+    state.status = 'running'
+    await this.stateManager.save(state)
     this.rebindRunScopedStore(state.run_id)
 
     for (const step of this.options.pipeline.steps) {
+      const previousStatus = state.steps[step.id]?.status
+      if (previousStatus === 'succeeded' || previousStatus === 'skipped') {
+        continue
+      }
+
       state.current_step = step.id
 
       if (requiresApproval(this.options.pipeline, step)) {
@@ -142,6 +149,19 @@ export class Orchestrator {
       workDir: this.options.workDir,
       taskDescription: this.options.taskDescription,
     })
+  }
+
+  private async loadOrCreateState(): Promise<RunState> {
+    if (this.options.runId != null) {
+      try {
+        return await this.stateManager.load(this.options.runId)
+      }
+      catch {
+        // Missing state for an explicit run id means this is a new named run.
+      }
+    }
+
+    return this.stateManager.create(this.options.pipeline, this.options.runId)
   }
 }
 

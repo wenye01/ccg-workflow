@@ -4,6 +4,7 @@ import ansis from 'ansis'
 import { version } from '../package.json'
 import { init } from './commands/init'
 import { showMainMenu } from './commands/menu'
+import { registerRunCommand } from './commands/run'
 import { update } from './commands/update'
 import { i18n, initI18n } from './i18n'
 import { readCcgConfig } from './utils/config'
@@ -19,6 +20,7 @@ function customizeHelp(sections: any[]): any[] {
     body: [
       `  ${ansis.cyan('ccg')}              ${i18n.t('cli:help.commandDescriptions.showMenu')}`,
       `  ${ansis.cyan('ccg init')} | ${ansis.cyan('i')}     ${i18n.t('cli:help.commandDescriptions.initConfig')}`,
+      `  ${ansis.cyan('ccg run')}          Run a runtime pipeline`,
       `  ${ansis.cyan('ccg update')}        Update CCG workflows`,
       '',
       ansis.gray(`  ${i18n.t('cli:help.shortcuts')}`),
@@ -114,6 +116,8 @@ export async function setupCommands(cli: CAC): Promise<void> {
     .action(async () => {
       await update()
     })
+
+  registerRunCommand(cli)
 
   cli.help(sections => customizeHelp(sections))
   cli.version(version)

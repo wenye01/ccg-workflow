@@ -2,6 +2,7 @@ import type { InstallResult, ResolvedPaths } from '../types'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import { basename, join } from 'pathe'
+import { generateRuntimeCommand } from '../runtime/command-generator'
 import { getWorkflowById } from './installer-data'
 import { PACKAGE_ROOT, injectConfigVariables, replaceHomePathsInTemplate } from './installer-template'
 import { commandFileName, collectRelativeFiles, createEmptyManifest, readManifest, uninstallWithManifest, writeManifest } from './manifest'
@@ -257,7 +258,17 @@ async function installCommandFiles(ctx: InstallContext, workflowIds: string[]): 
       const destFile = join(commandsDir, `${cmd}.md`)
 
       try {
-        if (await fs.pathExists(srcFile)) {
+        if (workflow.runtimePipeline != null) {
+          if (ctx.force || !(await fs.pathExists(destFile))) {
+            const content = generateRuntimeCommand({
+              pipeline: workflow.runtimePipeline,
+              description: workflow.descriptionEn ?? workflow.description ?? `Run ${workflow.runtimePipeline} pipeline`,
+            })
+            await fs.writeFile(destFile, content, 'utf-8')
+          }
+          ctx.result.installedCommands.push(cmd)
+        }
+        else if (await fs.pathExists(srcFile)) {
           if (ctx.force || !(await fs.pathExists(destFile))) {
             let content = await fs.readFile(srcFile, 'utf-8')
             content = injectConfigVariables(content, ctx.config)
@@ -808,6 +819,7 @@ export async function installWorkflows(
   ]
   manifest.settingsEntries.permissions = [
     'Bash(*codeagent-wrapper*)',
+    'Bash(ccg run*)',
     'Bash(~/.ccg/bin/codeagent-wrapper --backend gemini*)',
     'Bash(~/.ccg/bin/codeagent-wrapper --backend codex*)',
   ]

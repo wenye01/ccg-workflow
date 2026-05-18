@@ -4,6 +4,7 @@ export * from './runtime'
 export * from './backends'
 export { init } from './commands/init'
 export { showMainMenu } from './commands/menu'
+export { registerRunCommand, runCommand } from './commands/run'
 export { update } from './commands/update'
 export { i18n, initI18n, changeLanguage } from './i18n'
 export {

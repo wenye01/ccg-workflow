@@ -57,10 +57,11 @@ describe('installWorkflows E2E', () => {
     }
   })
 
-  it('plan.md contains Glob + Grep guidance', async () => {
+  it('runtime workflows are installed as thin ccg run commands', async () => {
     const content = readFileSync(join(tmpDir, 'commands', 'ccg', 'plan.md'), 'utf-8')
-    expect(content).toContain('Glob')
-    expect(content).toContain('Grep')
+    expect(content).toContain('ccg run default --prompt "$ARGUMENTS"')
+    expect(content).not.toContain('Glob')
+    expect(content).not.toContain('Grep')
   })
 
   it('planner.md frontmatter uses only filesystem tools', async () => {

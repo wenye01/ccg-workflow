@@ -1,6 +1,7 @@
 export * from './artifact'
 export * from './bindings'
 export * from './compiler'
+export * from './command-generator'
 export * from './orchestrator'
 export * from './prompt-assembler'
 export * from './recovery'

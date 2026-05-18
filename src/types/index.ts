@@ -59,6 +59,7 @@ export interface WorkflowConfig {
   nameEn: string
   category: string
   commands: string[]
+  runtimePipeline?: string
   defaultSelected: boolean
   order: number
   description?: string
