@@ -771,6 +771,10 @@ func buildCodexArgs(cfg *Config, targetArg string) []string {
 
 	args := []string{"e"}
 
+	if model := strings.TrimSpace(cfg.CodexModel); model != "" {
+		args = append(args, "-m", model)
+	}
+
 	// Default: auto-approve all operations (consistent with Gemini's -y behavior)
 	// Users can disable this by setting CODEX_REQUIRE_APPROVAL=true
 	if !envFlagEnabled("CODEX_REQUIRE_APPROVAL") {

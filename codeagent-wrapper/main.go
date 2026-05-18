@@ -362,11 +362,17 @@ func run() (exitCode int) {
 	logInfo(fmt.Sprintf("Selected backend: %s", backend.Name()))
 
 	// Log model parameter usage
+	if cfg.CodexModel != "" && cfg.Backend == "codex" {
+		logInfo(fmt.Sprintf("Using Codex model: %s", cfg.CodexModel))
+	}
 	if cfg.GeminiModel != "" && cfg.Backend == "gemini" {
 		logInfo(fmt.Sprintf("Using Gemini model: %s", cfg.GeminiModel))
 	}
 
 	// Warn if model parameter used with non-gemini backend
+	if cfg.CodexModel != "" && cfg.Backend != "codex" {
+		logWarn("--codex-model parameter is only effective with --backend codex")
+	}
 	if cfg.GeminiModel != "" && cfg.Backend != "gemini" {
 		logWarn("--gemini-model parameter is only effective with --backend gemini")
 	}
@@ -610,6 +616,11 @@ Parallel mode examples:
 Options:
     --lite, -L            Lite mode: disable Web UI, faster response
     --backend <name>      Select backend (codex, gemini, claude)
+    --model <name>        Specify model for selected backend (codex/gemini)
+    --codex-model <name>  Specify Codex model (codex backend only)
+                          Can also be set via CODEX_MODEL environment variable
+                          CLI parameter takes precedence over environment variable
+                          Example: gpt-5.4-mini
     --gemini-model <name> Specify Gemini model (gemini backend only)
                           Can also be set via GEMINI_MODEL environment variable
                           CLI parameter takes precedence over environment variable
@@ -620,6 +631,7 @@ Options:
 
 Environment Variables:
     CODEX_TIMEOUT              Timeout in milliseconds (default: 7200000)
+    CODEX_MODEL                Codex model passed as -m/--model
     CODEX_REQUIRE_APPROVAL     Require manual approval for file operations (default: false)
     CODEX_DISABLE_SKIP_GIT_CHECK  Disable skip-git-repo-check flag (default: false)
     CODEAGENT_ASCII_MODE       Use ASCII symbols instead of Unicode (PASS/WARN/FAIL)

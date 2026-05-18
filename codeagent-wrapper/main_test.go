@@ -1147,6 +1147,79 @@ func TestBackendParseArgs_BackendFlag(t *testing.T) {
 	}
 }
 
+func TestBackendParseArgs_ModelFlags(t *testing.T) {
+	t.Setenv("CODEX_MODEL", "gpt-env")
+	t.Setenv("GEMINI_MODEL", "gemini-env")
+
+	tests := []struct {
+		name        string
+		args        []string
+		wantBackend string
+		wantCodex   string
+		wantGemini  string
+		wantErr     bool
+	}{
+		{
+			name:        "codex model flag",
+			args:        []string{"codeagent-wrapper", "--backend", "codex", "--codex-model", "gpt-5.4-mini", "task"},
+			wantBackend: "codex",
+			wantCodex:   "gpt-5.4-mini",
+			wantGemini:  "gemini-env",
+		},
+		{
+			name:        "generic model follows final codex backend",
+			args:        []string{"codeagent-wrapper", "--model", "gpt-5.4-mini", "--backend", "codex", "task"},
+			wantBackend: "codex",
+			wantCodex:   "gpt-5.4-mini",
+			wantGemini:  "gemini-env",
+		},
+		{
+			name:        "generic model follows final gemini backend",
+			args:        []string{"codeagent-wrapper", "--model", "gemini-2.5-flash", "--backend", "gemini", "task"},
+			wantBackend: "gemini",
+			wantCodex:   "gpt-env",
+			wantGemini:  "gemini-2.5-flash",
+		},
+		{
+			name:        "env model defaults",
+			args:        []string{"codeagent-wrapper", "task"},
+			wantBackend: defaultBackendName,
+			wantCodex:   "gpt-env",
+			wantGemini:  "gemini-env",
+		},
+		{
+			name:    "missing generic model value",
+			args:    []string{"codeagent-wrapper", "--model"},
+			wantErr: true,
+		},
+		{
+			name:    "missing codex model value",
+			args:    []string{"codeagent-wrapper", "--codex-model"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Args = tt.args
+			cfg, err := parseArgs()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.Backend != tt.wantBackend || cfg.CodexModel != tt.wantCodex || cfg.GeminiModel != tt.wantGemini {
+				t.Fatalf("got backend=%q codex=%q gemini=%q, want backend=%q codex=%q gemini=%q",
+					cfg.Backend, cfg.CodexModel, cfg.GeminiModel, tt.wantBackend, tt.wantCodex, tt.wantGemini)
+			}
+		})
+	}
+}
+
 func TestBackendParseArgs_SkipPermissions(t *testing.T) {
 	const envKey = "CODEAGENT_SKIP_PERMISSIONS"
 	t.Cleanup(func() { os.Unsetenv(envKey) })
@@ -1438,6 +1511,32 @@ func TestRunBuildCodexArgs_ResumeMode(t *testing.T) {
 	}
 	if len(args) != len(expected) {
 		t.Fatalf("len mismatch")
+	}
+	for i := range args {
+		if args[i] != expected[i] {
+			t.Fatalf("args[%d]=%s, want %s", i, args[i], expected[i])
+		}
+	}
+}
+
+func TestRunBuildCodexArgs_WithModel(t *testing.T) {
+	const key = "CODEX_REQUIRE_APPROVAL"
+	t.Cleanup(func() { os.Unsetenv(key) })
+	os.Unsetenv(key)
+
+	cfg := &Config{Mode: "new", WorkDir: "/test/dir", CodexModel: "gpt-5.4-mini"}
+	args := buildCodexArgs(cfg, "my task")
+	expected := []string{
+		"e",
+		"-m", "gpt-5.4-mini",
+		"--dangerously-bypass-approvals-and-sandbox",
+		"--skip-git-repo-check",
+		"-C", "/test/dir",
+		"--json",
+		"my task",
+	}
+	if len(args) != len(expected) {
+		t.Fatalf("len mismatch: got %v want %v", args, expected)
 	}
 	for i := range args {
 		if args[i] != expected[i] {
