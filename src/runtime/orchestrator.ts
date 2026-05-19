@@ -1,6 +1,7 @@
 import type { BackendRegistry } from '../backends'
-import type { CompiledPipeline, CompiledStep, OrchestratorCallbacks, RunState, StepStatus } from './types'
+import type { CompiledPipeline, CompiledStep, OrchestratorCallbacks, RunState, RuntimeLoggerLike, StepStatus } from './types'
 import { ArtifactStore } from './artifact'
+import { createRuntimeLogger } from './logger'
 import { resolveFailureAction, requiresApproval } from './recovery'
 import { RunStateManager } from './state'
 import { StepRunner } from './runner'
@@ -12,6 +13,7 @@ export interface OrchestratorOptions {
   taskDescription: string
   runId?: string
   callbacks?: OrchestratorCallbacks
+  logger?: RuntimeLoggerLike
 }
 
 export class Orchestrator {
@@ -19,6 +21,7 @@ export class Orchestrator {
   private store: ArtifactStore
   private runner: StepRunner
   private readonly callbacks: OrchestratorCallbacks
+  private readonly logger: RuntimeLoggerLike
 
   constructor(private readonly options: OrchestratorOptions) {
     this.stateManager = new RunStateManager(options.workDir)
@@ -34,6 +37,10 @@ export class Orchestrator {
       taskDescription: options.taskDescription,
     })
     this.callbacks = options.callbacks ?? {}
+    this.logger = options.logger ?? createRuntimeLogger({
+      rootDir: options.workDir,
+      runId: options.runId,
+    })
   }
 
   async run(): Promise<RunState> {
@@ -41,6 +48,13 @@ export class Orchestrator {
     state.status = 'running'
     await this.stateManager.save(state)
     this.rebindRunScopedStore(state.run_id)
+    if ('bindRun' in this.logger && typeof this.logger.bindRun === 'function') {
+      this.logger.bindRun(state.run_id)
+    }
+    await this.logger.info?.('Run started', {
+      run_id: state.run_id,
+      pipeline: this.options.pipeline.name,
+    })
 
     for (const step of this.options.pipeline.steps) {
       const previousStatus = state.steps[step.id]?.status
@@ -70,12 +84,21 @@ export class Orchestrator {
     state.current_step = null
     await this.stateManager.save(state)
     await this.callbacks.onComplete?.(state)
+    await this.logger.info?.('Run completed', {
+      run_id: state.run_id,
+      status: state.status,
+    })
     return state
   }
 
   private async runStepWithRecovery(step: CompiledStep, state: RunState): Promise<RunState> {
     while (true) {
       state = await this.startAttempt(state, step)
+      await this.logger.info?.('Step started', {
+        step_id: step.id,
+        backend: step.backend,
+        attempt: state.steps[step.id].attempt,
+      })
       await this.callbacks.onStepStart?.(step, state)
 
       try {
@@ -86,11 +109,21 @@ export class Orchestrator {
         stepState.backend_session_id = result.session_id ?? stepState.backend_session_id
         delete stepState.error
         await this.stateManager.save(state)
+        await this.logger.info?.('Step completed', {
+          step_id: step.id,
+          backend: step.backend,
+          duration_ms: result.duration_ms,
+          session_id: result.session_id,
+        })
         await this.callbacks.onStepComplete?.(step, result, state)
         return state
       }
       catch (error) {
         const err = error instanceof Error ? error : new Error(String(error))
+        await this.logger.error?.('Step failed', {
+          step_id: step.id,
+          error: err.message,
+        })
         await this.callbacks.onStepFailed?.(step, err, state)
 
         const action = resolveFailureAction(this.options.pipeline, step, state.steps[step.id].attempt)
@@ -148,6 +181,7 @@ export class Orchestrator {
       store: this.store,
       workDir: this.options.workDir,
       taskDescription: this.options.taskDescription,
+      logger: this.logger,
     })
   }
 

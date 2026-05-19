@@ -195,6 +195,14 @@ export interface OrchestratorCallbacks {
   onComplete?: (state: RunState) => void | Promise<void>
 }
 
+export interface RuntimeLoggerLike {
+  bindRun?: (runId: string) => RuntimeLoggerLike
+  debug?: (message: string, data?: Record<string, unknown>) => void | Promise<void>
+  info?: (message: string, data?: Record<string, unknown>) => void | Promise<void>
+  warn?: (message: string, data?: Record<string, unknown>) => void | Promise<void>
+  error?: (message: string, data?: Record<string, unknown>) => void | Promise<void>
+}
+
 export interface ValidationResult {
   ok: boolean
   errors: string[]

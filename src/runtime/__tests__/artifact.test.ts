@@ -64,4 +64,56 @@ describe('artifact store', () => {
       data: {},
     }))).rejects.toThrow('schema validation')
   })
+
+  it('validates richer JSON schema constraints', async () => {
+    const schemas = new Map([
+      ['report@1', {
+        type: 'report',
+        version: 1,
+        schema: {
+          type: 'object',
+          required: ['status', 'slug'],
+          properties: {
+            status: { type: 'string', enum: ['pass', 'fail'] },
+            slug: { type: 'string', pattern: '^[a-z-]+$', minLength: 3 },
+          },
+        },
+      }],
+    ])
+    const store = new ArtifactStore({ rootDir: tmpRoot, runId: 'run-rich-schema', schemas })
+
+    await expect(store.write(createArtifact({
+      type: 'report',
+      version: 1,
+      stepId: 'qa',
+      data: { status: 'unknown', slug: 'A' },
+    }))).rejects.toThrow('schema validation')
+  })
+
+  it('can bypass schema validation for degraded raw artifacts', async () => {
+    const schemas = new Map([
+      ['plan@1', {
+        type: 'plan',
+        version: 1,
+        schema: {
+          type: 'object',
+          required: ['summary'],
+          properties: {
+            summary: { type: 'string' },
+          },
+        },
+      }],
+    ])
+    const store = new ArtifactStore({ rootDir: tmpRoot, runId: 'run-raw', schemas })
+
+    await store.write(createArtifact({
+      type: 'plan',
+      version: 1,
+      stepId: 'plan',
+      data: { raw_text: { content: 'not structured' } },
+    }), { validate: false })
+
+    const read = await store.read('plan')
+    expect(read.data).toEqual({ raw_text: { content: 'not structured' } })
+  })
 })

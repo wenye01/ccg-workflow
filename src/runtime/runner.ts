@@ -1,6 +1,6 @@
-import type { BackendAdapter, BackendOutput, CompiledStep, OrchestratorCallbacks, RunState } from './types'
+import type { BackendAdapter, BackendOutput, CompiledStep, OrchestratorCallbacks, OutputBinding, RunState, RuntimeLoggerLike } from './types'
 import type { BackendRegistry } from '../backends'
-import { ArtifactStore, createArtifact } from './artifact'
+import { ArtifactStore, createArtifact, validateJsonSchema } from './artifact'
 import { assemblePrompt } from './prompt-assembler'
 import { resolveBindings } from './bindings'
 
@@ -9,6 +9,7 @@ export interface StepRunnerOptions {
   store: ArtifactStore
   workDir: string
   taskDescription: string
+  logger?: RuntimeLoggerLike
 }
 
 export class StepRunner {
@@ -49,12 +50,25 @@ export class StepRunner {
     callbacks: OrchestratorCallbacks,
   ): Promise<void> {
     for (const output of step.outputs ?? []) {
-      const data = extractArtifactData(output.type, step.outputs?.length ?? 0, result.artifacts)
+      const extraction = extractArtifactData(output, step.outputs?.length ?? 0, result)
+      const data = extraction.data
       if (data === undefined) {
         if (output.required === false) {
+          await this.persistRawArtifact(step, output, result, state, callbacks, 'artifact extraction failed')
           continue
         }
         throw new Error(`Step "${step.id}" did not produce required artifact "${output.type}"`)
+      }
+
+      const schemaErrors = validateJsonSchema(data, output.schema)
+      if (schemaErrors.length > 0) {
+        await this.options.logger?.warn?.('Artifact schema validation failed; degrading to raw_text artifact', {
+          step_id: step.id,
+          artifact: `${output.type}@${output.version}`,
+          errors: schemaErrors,
+        })
+        await this.persistRawArtifact(step, output, result, state, callbacks, schemaErrors.join('\n'))
+        continue
       }
 
       const artifact = createArtifact({
@@ -66,7 +80,38 @@ export class StepRunner {
       const record = await this.options.store.write(artifact)
       state.artifacts[output.type] = record
       await callbacks.onArtifactProduced?.(artifact, state)
+
+      if (extraction.source === 'message') {
+        await this.options.logger?.warn?.('Artifact was extracted from backend message fallback', {
+          step_id: step.id,
+          artifact: `${output.type}@${output.version}`,
+        })
+      }
     }
+  }
+
+  private async persistRawArtifact(
+    step: CompiledStep,
+    output: OutputBinding,
+    result: BackendOutput,
+    state: RunState,
+    callbacks: OrchestratorCallbacks,
+    reason: string,
+  ): Promise<void> {
+    const artifact = createArtifact({
+      type: output.type,
+      version: output.version,
+      stepId: step.id,
+      data: {
+        raw_text: {
+          content: result.message,
+          reason,
+        },
+      },
+    })
+    const record = await this.options.store.write(artifact, { validate: false })
+    state.artifacts[output.type] = record
+    await callbacks.onArtifactProduced?.(artifact, state)
   }
 }
 
@@ -81,18 +126,54 @@ async function executeBackend(
 }
 
 function extractArtifactData(
-  outputType: string,
+  output: OutputBinding,
   outputCount: number,
-  artifacts: Record<string, unknown> | undefined,
-): unknown {
+  result: BackendOutput,
+): { data: unknown, source: 'artifacts' | 'message' | 'none' } {
+  const artifacts = result.artifacts
+  const outputType = output.type
   if (artifacts == null) {
-    return undefined
+    const parsed = extractJsonObjectFromText(result.message)
+    if (parsed == null) {
+      return { data: undefined, source: 'none' }
+    }
+    return {
+      data: Object.prototype.hasOwnProperty.call(parsed, outputType) ? parsed[outputType] : parsed,
+      source: 'message',
+    }
   }
   if (Object.prototype.hasOwnProperty.call(artifacts, outputType)) {
-    return artifacts[outputType]
+    return { data: artifacts[outputType], source: 'artifacts' }
   }
   if (outputCount === 1) {
-    return artifacts
+    return { data: artifacts, source: 'artifacts' }
   }
-  return undefined
+  return { data: undefined, source: 'none' }
+}
+
+const fencedJsonBlockRe = /```json\s*([\s\S]*?)\s*```/gi
+
+function extractJsonObjectFromText(text: string): Record<string, unknown> | undefined {
+  const blocks = [...text.matchAll(fencedJsonBlockRe)].map(match => match[1])
+  for (const candidate of [...blocks].reverse()) {
+    const parsed = parseJsonObject(candidate)
+    if (parsed != null) {
+      return parsed
+    }
+  }
+  return parseJsonObject(text)
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | undefined {
+  try {
+    const parsed = JSON.parse(text.trim()) as unknown
+    return isRecord(parsed) ? parsed : undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
