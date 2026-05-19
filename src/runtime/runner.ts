@@ -54,7 +54,6 @@ export class StepRunner {
       const data = extraction.data
       if (data === undefined) {
         if (output.required === false) {
-          await this.persistRawArtifact(step, output, result, state, callbacks, 'artifact extraction failed')
           continue
         }
         throw new Error(`Step "${step.id}" did not produce required artifact "${output.type}"`)
@@ -62,6 +61,9 @@ export class StepRunner {
 
       const schemaErrors = validateJsonSchema(data, output.schema)
       if (schemaErrors.length > 0) {
+        if (output.required !== false) {
+          throw new Error(`Artifact "${output.type}@${output.version}" failed schema validation:\n${schemaErrors.join('\n')}`)
+        }
         await this.options.logger?.warn?.('Artifact schema validation failed; degrading to raw_text artifact', {
           step_id: step.id,
           artifact: `${output.type}@${output.version}`,
@@ -137,8 +139,11 @@ function extractArtifactData(
     if (parsed == null) {
       return { data: undefined, source: 'none' }
     }
+    if (Object.prototype.hasOwnProperty.call(parsed, outputType)) {
+      return { data: parsed[outputType], source: 'message' }
+    }
     return {
-      data: Object.prototype.hasOwnProperty.call(parsed, outputType) ? parsed[outputType] : parsed,
+      data: outputCount === 1 ? parsed : undefined,
       source: 'message',
     }
   }
