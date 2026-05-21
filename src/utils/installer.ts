@@ -1,7 +1,7 @@
 import type { InstallResult, ResolvedPaths } from '../types'
 import ansis from 'ansis'
 import fs from 'fs-extra'
-import { basename, join } from 'pathe'
+import { basename, dirname, join } from 'pathe'
 import { generateRuntimeCommand } from '../runtime/command-generator'
 import { getWorkflowById } from './installer-data'
 import { PACKAGE_ROOT, injectConfigVariables, replaceHomePathsInTemplate } from './installer-template'
@@ -63,7 +63,6 @@ interface InstallContext {
   installDir: string
   ccgPrivateDir: string
   ccgBinDir: string
-  skipBinary: boolean
   force: boolean
   config: InstallConfig
   templateDir: string
@@ -106,7 +105,7 @@ function isResolvedPaths(value: unknown): value is ResolvedPaths {
 // Binary download
 // ═══════════════════════════════════════════════════════
 
-const GITHUB_REPO = 'fengshao1227/ccg-workflow'
+const GITHUB_REPO = 'wenye01/ccg-workflow'
 const RELEASE_TAG = 'preset'
 
 /** Download sources: R2 CDN first (China-friendly) → GitHub fallback (global) */
@@ -197,6 +196,59 @@ async function installBinaryFromLocalSource(destPath: string): Promise<boolean> 
     await fs.chmod(destPath, 0o755)
   }
   return true
+}
+
+async function readBinaryVersion(binaryPath: string): Promise<string | null> {
+  try {
+    const { execFileSync } = await import('node:child_process')
+    const output = execFileSync(binaryPath, ['--version'], { stdio: 'pipe' }).toString().trim()
+    const version = output.replace(/^.*version\s*/, '').trim()
+    return version !== '' ? version : null
+  }
+  catch {
+    return null
+  }
+}
+
+async function buildBinaryFromSource(destPath: string): Promise<boolean> {
+  const sourceDir = join(PACKAGE_ROOT, 'codeagent-wrapper')
+  if (!(await fs.pathExists(sourceDir))) {
+    throw new Error(`Wrapper source directory not found: ${sourceDir}`)
+  }
+
+  const binDir = dirname(destPath)
+  const binaryName = basename(destPath)
+  const stagingBinary = join(binDir, `${binaryName}.build-${process.pid}-${Date.now()}${process.platform === 'win32' ? '.exe' : ''}`)
+
+  await fs.ensureDir(binDir)
+
+  try {
+    const { execFileSync } = await import('node:child_process')
+    execFileSync('go', ['build', '-o', stagingBinary, '.'], {
+      cwd: sourceDir,
+      stdio: 'pipe',
+    })
+
+    const builtVersion = await readBinaryVersion(stagingBinary)
+    if (builtVersion !== EXPECTED_BINARY_VERSION) {
+      throw new Error(`Built binary version mismatch: expected ${EXPECTED_BINARY_VERSION}, got ${builtVersion ?? 'unknown'}`)
+    }
+
+    await fs.move(stagingBinary, destPath, { overwrite: true })
+    if (process.platform !== 'win32') {
+      await fs.chmod(destPath, 0o755)
+    }
+
+    const installedVersion = await readBinaryVersion(destPath)
+    if (installedVersion !== EXPECTED_BINARY_VERSION) {
+      throw new Error(`Installed binary version mismatch: expected ${EXPECTED_BINARY_VERSION}, got ${installedVersion ?? 'unknown'}`)
+    }
+
+    return true
+  }
+  finally {
+    await fs.remove(stagingBinary).catch(() => {})
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -601,7 +653,7 @@ export async function verifyBinaryVersion(_installDir?: string, ccgPrivateDir = 
 }
 
 /**
- * Show prominent red-box warning when codeagent-wrapper binary download failed.
+ * Show prominent red-box warning when codeagent-wrapper binary provisioning failed.
  * Used by both init and update flows to provide manual fix instructions.
  */
 export function showBinaryDownloadWarning(binDir: string): void {
@@ -617,8 +669,8 @@ export function showBinaryDownloadWarning(binDir: string): void {
 
   console.log()
   console.log(ansis.red.bold(`  ╔════════════════════════════════════════════════════════════╗`))
-  console.log(ansis.red.bold(`  ║  ⚠  codeagent-wrapper 下载失败                            ║`))
-  console.log(ansis.red.bold(`  ║     Binary download failed (network issue)                 ║`))
+  console.log(ansis.red.bold(`  ║  ⚠  codeagent-wrapper 不可用                              ║`))
+  console.log(ansis.red.bold(`  ║     Binary build/provisioning failed                       ║`))
   console.log(ansis.red.bold(`  ╚════════════════════════════════════════════════════════════╝`))
   console.log()
   console.log(ansis.yellow(`  多模型协作命令 (/ccg:workflow, /ccg:plan 等) 需要此文件才能工作。`))
@@ -626,18 +678,21 @@ export function showBinaryDownloadWarning(binDir: string): void {
   console.log()
   console.log(ansis.cyan(`  手动修复 / Manual fix:`))
   console.log()
-  console.log(ansis.white(`    1. 下载 / Download:`))
+  console.log(ansis.white(`    1. 确认 Go 工具链 / Verify Go toolchain:`))
+  console.log(ansis.cyan(`       go version`))
+  console.log()
+  console.log(ansis.white(`    2. 如需手动安装预构建版本 / For future release builds:`))
   console.log(ansis.cyan(`       ${releaseUrl}`))
   console.log(ansis.gray(`       → 找到 ${ansis.white(binaryFileName)} 并下载`))
   console.log()
-  console.log(ansis.white(`    2. 放到 / Place at:`))
+  console.log(ansis.white(`    3. 放到 / Place at:`))
   const displayPath = process.platform === 'win32'
     ? `${binDir.replace(/\//g, '\\')}\\${destFileName}`
     : `${binDir}/${destFileName}`
   console.log(ansis.cyan(`       ${displayPath}`))
   console.log()
   if (process.platform !== 'win32') {
-    console.log(ansis.white(`    3. 加权限 / Make executable:`))
+    console.log(ansis.white(`    4. 加权限 / Make executable:`))
     console.log(ansis.cyan(`       chmod +x "${binDir}/${destFileName}"`))
     console.log()
   }
@@ -647,71 +702,56 @@ export function showBinaryDownloadWarning(binDir: string): void {
 }
 
 /**
- * Download and install codeagent-wrapper binary for current platform.
- * Skips download if binary already exists and passes `--version` check.
+ * Install codeagent-wrapper binary for current platform.
+ * Current default path: copy an injected local binary for tests/dev, otherwise build from source.
+ * Release download helpers remain available for future packaged releases.
  */
 async function installBinaryFile(ctx: InstallContext): Promise<void> {
-  if (ctx.skipBinary) {
-    ctx.result.binPath = ctx.ccgBinDir
-    ctx.result.binInstalled = await verifyBinary(undefined, CCG_PRIVATE_DIR)
-    return
-  }
-
   try {
     const binDir = ctx.ccgBinDir
     await fs.ensureDir(binDir)
-
-    const binaryName = getBinaryName()
-    if (!binaryName) {
-      ctx.result.errors.push(`Unsupported platform: ${process.platform}`)
-      ctx.result.success = false
-      return
-    }
+    ctx.result.binPath = binDir
 
     const destBinary = join(binDir, process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper')
 
     // Check if binary exists, is functional, AND version matches
     if (await fs.pathExists(destBinary)) {
-      try {
-        const { execSync } = await import('node:child_process')
-        const versionOutput = execSync(`"${destBinary}" --version`, { stdio: 'pipe' }).toString().trim()
-        const installedVersion = versionOutput.replace(/^.*version\s*/, '')
-
-        // Compare with expected version from package
-        const expectedVersion = EXPECTED_BINARY_VERSION
-        if (installedVersion === expectedVersion) {
-          // Binary exists, works, and version matches — skip download
-          ctx.result.binPath = binDir
-          ctx.result.binInstalled = true
-          return
-        }
-        // Version mismatch — fall through to re-download
-      }
-      catch {
-        // Binary exists but broken — fall through to re-download
+      const installedVersion = await readBinaryVersion(destBinary)
+      if (installedVersion === EXPECTED_BINARY_VERSION) {
+        ctx.result.binInstalled = true
+        return
       }
     }
 
-    const installed = await installBinaryFromLocalSource(destBinary)
-      || await downloadBinaryFromRelease(binaryName, destBinary)
+    let installed = false
+    try {
+      installed = await installBinaryFromLocalSource(destBinary)
+        || await buildBinaryFromSource(destBinary)
+    }
+    catch (error) {
+      ctx.result.errors.push(`Failed to compile codeagent-wrapper from source: ${error}`)
+      ctx.result.success = false
+      return
+    }
 
     if (installed) {
-      try {
-        const { execSync } = await import('node:child_process')
-        execSync(`"${destBinary}" --version`, { stdio: 'pipe' })
-        ctx.result.binPath = binDir
+      const installedVersion = await readBinaryVersion(destBinary)
+      if (installedVersion === EXPECTED_BINARY_VERSION) {
         ctx.result.binInstalled = true
       }
-      catch (verifyError) {
-        ctx.result.errors.push(`Binary verification failed (non-blocking): ${verifyError}`)
+      else {
+        ctx.result.errors.push(`Binary verification failed: expected ${EXPECTED_BINARY_VERSION}, got ${installedVersion ?? 'unknown'}`)
+        ctx.result.success = false
       }
     }
     else {
-      ctx.result.errors.push(`Failed to download binary: ${binaryName} from GitHub Release (after 3 attempts). Check network or visit https://github.com/${GITHUB_REPO}/releases/tag/${RELEASE_TAG}`)
+      ctx.result.errors.push(`Failed to install codeagent-wrapper from source`)
+      ctx.result.success = false
     }
   }
   catch (error) {
-    ctx.result.errors.push(`Failed to install codeagent-wrapper (non-blocking): ${error}`)
+    ctx.result.errors.push(`Failed to install codeagent-wrapper: ${error}`)
+    ctx.result.success = false
   }
 }
 
@@ -754,7 +794,6 @@ export async function installWorkflows(
     installDir,
     ccgPrivateDir: resolvedCcgPrivateDir,
     ccgBinDir: resolvedCcgBinDir,
-    skipBinary: paths?.scope === 'local',
     force,
     config: {
       routing: installConfig?.routing as InstallConfig['routing'] || {

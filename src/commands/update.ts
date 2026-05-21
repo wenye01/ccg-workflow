@@ -20,10 +20,14 @@ function shellQuote(value: string): string {
   return JSON.stringify(value)
 }
 
+export interface UpdateOptions {
+  exitOnFailure?: boolean
+}
+
 /**
  * Main update command - checks for updates and installs if available
  */
-export async function update(): Promise<void> {
+export async function update(options: UpdateOptions = {}): Promise<void> {
   const localPaths = resolvePaths('local')
   const isLocalUpdate = await fs.pathExists(localPaths.ccgManifestFile)
   const paths = isLocalUpdate ? localPaths : resolvePaths('global')
@@ -91,7 +95,7 @@ export async function update(): Promise<void> {
 
     // Pass localVersion as fromVersion for accurate display
     const fromVersion = needsWorkflowUpdate ? localVersion : currentVersion
-    await performUpdate(fromVersion, latestVersion || currentVersion, hasUpdate, isLocalUpdate)
+    await performUpdate(fromVersion, latestVersion || currentVersion, hasUpdate, isLocalUpdate, options)
   }
   catch (error) {
     spinner.stop()
@@ -200,15 +204,21 @@ async function checkIfGlobalInstall(): Promise<boolean> {
 /**
  * Perform the actual update process
  */
-async function performUpdate(fromVersion: string, toVersion: string, isNewVersion: boolean, isLocalUpdate = false): Promise<void> {
+async function performUpdate(
+  fromVersion: string,
+  toVersion: string,
+  isNewVersion: boolean,
+  isLocalUpdate = false,
+  options: UpdateOptions = {},
+): Promise<void> {
   console.log()
   console.log(ansis.yellow.bold(`⚙️  ${i18n.t('update:starting')}`))
   console.log()
 
   const paths = resolvePaths(isLocalUpdate ? 'local' : 'global')
 
-  // Check if installed globally via npm. Local project updates still reuse the
-  // globally shared CLI/binary, but must not prompt for global package changes.
+  // Check if installed globally via npm. Local project updates use the
+  // project-scoped wrapper binary and must not prompt for global package changes.
   const isGlobalInstall = !isLocalUpdate && await checkIfGlobalInstall()
 
   // If globally installed and only workflow needs update (package is already latest)
@@ -329,6 +339,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
         paths.claudeSkillsDir,
         paths.claudeRulesDir,
         paths.ccgPromptsDir,
+        paths.ccgBinDir,
       ]
     : [
         join(installDir, 'commands', 'ccg'),
@@ -432,6 +443,10 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     // Verify binary exists, is functional, AND version matches
     if (!isLocalUpdate && !(await verifyBinary(installDir))) {
       showBinaryDownloadWarning(CCG_BIN_DIR)
+      if (options.exitOnFailure !== false) {
+        process.exitCode = 1
+      }
+      return
     }
     else if (!isLocalUpdate) {
       // Binary exists and runs, but check version
@@ -439,6 +454,10 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
       const versionOk = await verifyBinaryVersion(installDir)
       if (!versionOk) {
         showBinaryDownloadWarning(CCG_BIN_DIR)
+        if (options.exitOnFailure !== false) {
+          process.exitCode = 1
+        }
+        return
       }
     }
   }

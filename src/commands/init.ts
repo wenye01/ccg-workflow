@@ -593,7 +593,12 @@ export async function init(options: InitOptions = {}): Promise<void> {
           config: installConfig,
         })
 
-    spinner.succeed(ansis.green(i18n.t('init:installSuccess')))
+    if (result.success) {
+      spinner.succeed(ansis.green(i18n.t('init:installSuccess')))
+    }
+    else {
+      spinner.fail(ansis.red(i18n.t('init:installFailed')))
+    }
 
     // ═══════════════════════════════════════════════════════
     // Save settings.json: API config + Hook auto-approve
@@ -634,12 +639,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log(`    ${ansis.green('✓')} API ${ansis.gray(`→ ${settingsPath}`)}`)
     }
 
-    // Always install codeagent-wrapper auto-approve via permissions.allow for global installs.
-    if (!isLocal) {
-      await installHook(settingsPath)
-      console.log()
-      console.log(`    ${ansis.green('✓')} ${i18n.t('init:hooks.installed')} ${ansis.gray('(permissions.allow)')}`)
-    }
+    // Install codeagent-wrapper auto-approve via permissions.allow for both global and local installs.
+    await installHook(settingsPath)
+    console.log()
+    console.log(`    ${ansis.green('✓')} ${i18n.t('init:hooks.installed')} ${ansis.gray('(permissions.allow)')}`)
 
     // jq check removed — permissions.allow approach does not require jq
 
@@ -708,14 +711,14 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
 
     // Show binary installation result
-    if (!isLocal && result.binInstalled && result.binPath) {
+    if (result.binInstalled && result.binPath) {
       console.log()
       console.log(ansis.cyan(`  ${i18n.t('init:installedBinary')}`))
       console.log(`    ${ansis.green('✓')} codeagent-wrapper ${ansis.gray(`→ ${result.binPath}`)}`)
 
       const platform = process.platform
 
-      if (platform === 'win32') {
+      if (!isLocal && platform === 'win32') {
         const windowsPath = result.binPath.replace(/\//g, '\\').replace(/\\$/, '')
         try {
           const { execSync } = await import('node:child_process')
@@ -737,7 +740,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
           // Silently ignore PATH config errors on Windows
         }
       }
-      else if (!options.skipPrompt) {
+      else if (!isLocal && !options.skipPrompt) {
         const exportCommand = `export PATH="${result.binPath}:$PATH"`
         const shell = process.env.SHELL || ''
         const isZsh = shell.includes('zsh')
@@ -775,10 +778,17 @@ export async function init(options: InitOptions = {}): Promise<void> {
           console.log(`      ${ansis.cyan(exportCommand)}`)
         }
       }
+      else if (isLocal) {
+        console.log(`    ${ansis.gray('Local install uses the project .ccg/bin directory directly.')}`)
+      }
     }
     else if (!isLocal) {
-      // Binary download failed — show prominent warning with manual fix instructions
+      // Binary provisioning failed — show prominent warning with manual fix instructions
       showBinaryDownloadWarning(CCG_BIN_DIR)
+    }
+
+    if (!result.success && options.exitOnFailure !== false) {
+      process.exitCode = 1
     }
 
     console.log()

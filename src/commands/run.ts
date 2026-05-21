@@ -2,6 +2,7 @@ import type { CAC } from 'cac'
 import type { BackendAdapter, BackendInput, BackendOutput, CompiledPipeline, CompiledStep, RunState } from '../runtime'
 import ansis from 'ansis'
 import fs from 'fs-extra'
+import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'pathe'
 import { BackendRegistry, createDefaultBackendRegistry, MockAdapter } from '../backends'
 import { compilePipelineFile, runPipeline, RunStateManager } from '../runtime'
@@ -36,6 +37,7 @@ export function registerRunCommand(cli: CAC): void {
 
 export async function runCommand(pipelineArg?: string, options: RunCommandOptions = {}): Promise<void> {
   const workDir = resolve(options.workDir ?? process.cwd())
+  const wrapperPath = await resolveWrapperPath(workDir)
 
   if (options.list) {
     await listPipelines()
@@ -52,7 +54,7 @@ export async function runCommand(pipelineArg?: string, options: RunCommandOption
   const compiled = options.backend != null
     ? overridePipelineBackend(pipeline, options.backend)
     : pipeline
-  const registry = createCliBackendRegistry(options.backend)
+  const registry = createCliBackendRegistry(options.backend, wrapperPath)
 
   const state = await runPipeline({
     pipeline: compiled,
@@ -115,14 +117,29 @@ function overridePipelineBackend(pipeline: CompiledPipeline, backend: string): C
   }
 }
 
-function createCliBackendRegistry(backendOverride?: string): BackendRegistry {
+function createCliBackendRegistry(backendOverride?: string, wrapperPath?: string): BackendRegistry {
   if (backendOverride !== 'mock') {
-    return createDefaultBackendRegistry()
+    return createDefaultBackendRegistry({ wrapperPath })
   }
 
-  const registry = createDefaultBackendRegistry()
+  const registry = createDefaultBackendRegistry({ wrapperPath })
   registry.register(new SchemaAwareMockAdapter())
   return registry
+}
+
+async function resolveWrapperPath(workDir: string): Promise<string | undefined> {
+  const wrapperName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
+  const localWrapper = join(workDir, '.ccg', 'bin', wrapperName)
+  const globalWrapper = join(homedir(), '.ccg', 'bin', wrapperName)
+  const bundledWrapper = join(PACKAGE_ROOT, 'codeagent-wrapper', wrapperName)
+
+  for (const candidate of [localWrapper, globalWrapper, bundledWrapper]) {
+    if (await fs.pathExists(candidate)) {
+      return candidate
+    }
+  }
+
+  return undefined
 }
 
 function createConsoleCallbacks() {

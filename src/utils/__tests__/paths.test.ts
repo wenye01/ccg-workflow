@@ -15,7 +15,7 @@ describe('resolvePaths', () => {
     expect(paths.ccgBinDir).toBe(join(home, '.ccg', 'bin'))
   })
 
-  it('resolves local install paths under the project while keeping binaries global', () => {
+  it('resolves local install paths under the project, including local binaries', () => {
     const projectRoot = '/tmp/ccg-project'
     const paths = resolvePaths('local', projectRoot)
 
@@ -23,6 +23,6 @@ describe('resolvePaths', () => {
     expect(paths.projectRoot).toBe(projectRoot)
     expect(paths.claudeCommandsDir).toBe(join(projectRoot, '.claude', 'commands', 'ccg'))
     expect(paths.ccgConfigFile).toBe(join(projectRoot, '.ccg', 'config.toml'))
-    expect(paths.ccgBinDir).toBe(join(homedir(), '.ccg', 'bin'))
+    expect(paths.ccgBinDir).toBe(join(projectRoot, '.ccg', 'bin'))
   })
 })

@@ -36,11 +36,15 @@ export class BackendRegistry {
   }
 }
 
-export function createDefaultBackendRegistry(): BackendRegistry {
+export interface DefaultBackendRegistryOptions {
+  wrapperPath?: string
+}
+
+export function createDefaultBackendRegistry(options: DefaultBackendRegistryOptions = {}): BackendRegistry {
   const registry = new BackendRegistry()
-  registry.register(new CodexAdapter())
-  registry.register(new ClaudeAdapter())
-  registry.register(new GeminiAdapter())
+  registry.register(new CodexAdapter({ wrapperPath: options.wrapperPath }))
+  registry.register(new ClaudeAdapter({ wrapperPath: options.wrapperPath }))
+  registry.register(new GeminiAdapter({ wrapperPath: options.wrapperPath }))
   registry.register(new MockAdapter())
   return registry
 }

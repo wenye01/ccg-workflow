@@ -180,10 +180,10 @@ export async function showMainMenu(): Promise<void> {
 
     switch (action) {
       case '1':
-        await init()
+        await init({ exitOnFailure: false })
         break
       case '2':
-        await update()
+        await update({ exitOnFailure: false })
         break
       case '3':
         await configApi()

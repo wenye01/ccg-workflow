@@ -82,6 +82,6 @@ export function resolvePaths(scope: InstallScope, projectRoot?: string): Resolve
     ccgManifestFile: join(root, '.ccg', 'manifest.json'),
     ccgPromptsDir: join(root, '.ccg', 'prompts'),
     ccgBackupDir: join(root, '.ccg', 'backup'),
-    ccgBinDir: CCG_BIN_DIR,
+    ccgBinDir: join(root, '.ccg', 'bin'),
   }
 }

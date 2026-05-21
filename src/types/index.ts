@@ -71,6 +71,7 @@ export interface InitOptions {
   lang?: SupportedLang
   skipPrompt?: boolean
   force?: boolean
+  exitOnFailure?: boolean
   // 非交互模式参数
   frontend?: string
   backend?: string

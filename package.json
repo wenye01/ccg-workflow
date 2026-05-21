@@ -27,6 +27,7 @@
   "files": [
     "bin/ccg.mjs",
     "dist",
+    "codeagent-wrapper/",
     "schemas/",
     "src/pipelines/",
     "templates/commands/analyze.md",

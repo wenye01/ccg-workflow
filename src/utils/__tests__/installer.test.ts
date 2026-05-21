@@ -264,11 +264,32 @@ describe('installWorkflows — binary installation', () => {
     await fs.remove(tmpDir)
   })
 
+  it('compiles codeagent-wrapper from source when no local override is set', async () => {
+    const previousBinary = process.env.CCG_WORKFLOW_LOCAL_BINARY
+    delete process.env.CCG_WORKFLOW_LOCAL_BINARY
+
+    const sourceTmpDir = join(tmpdir(), `ccg-test-source-bin-${Date.now()}`)
+    try {
+      const result = await installWorkflows(['workflow'], sourceTmpDir, true)
+
+      expect(result.binInstalled).toBe(true)
+      expect(result.binPath).toBe(join(sourceTmpDir, '.ccg', 'bin'))
+
+      const binaryName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
+      expect(fs.existsSync(join(result.binPath!, binaryName))).toBe(true)
+    }
+    finally {
+      process.env.CCG_WORKFLOW_LOCAL_BINARY = previousBinary
+      await fs.remove(sourceTmpDir)
+    }
+  }, 30_000)
+
   it('installs codeagent-wrapper binary for current platform', async () => {
     const result = await installWorkflows(['workflow'], tmpDir, true)
 
     expect(result.binInstalled).toBe(true)
     expect(result.binPath).toBeTruthy()
+    expect(result.binPath).toBe(join(tmpDir, '.ccg', 'bin'))
 
     const binaryName = process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper'
     expect(fs.existsSync(join(result.binPath!, binaryName))).toBe(true)

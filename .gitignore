@@ -61,6 +61,8 @@ verify-*.sh
 FINAL_VERIFICATION.md
 *_FIX.md
 *_REFERENCE.md
+docs/install-migration-plan.md
+docs/migration-plan.md
 
 # Old package tarballs
 *.tgz
